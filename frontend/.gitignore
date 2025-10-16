@@ -1,0 +1,31 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+
+ChatGPT Image Aug 16, 2025, 01_20_33 AM.png
+ChatGPT Image Aug 16, 2025, 02_09_06 AM.png
+ChatGPT Image Aug 18, 2025, 04_04_36 AM.png
+
+Gemini_Generated_Image_lfb661lfb661lfb6.png

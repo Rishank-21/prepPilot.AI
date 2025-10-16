@@ -1,0 +1,8 @@
+public House(Plumber plumber) {
+    this.plumber = plumber; //Dependency injected via the constructor
+}
+
+public void build() {
+    plumber.installPipes();
+    System.out.println("Building the house...");
+}
