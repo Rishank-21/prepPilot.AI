@@ -75,7 +75,7 @@ const LandingPage = () => {
         <div>
           <section className="flex items-center justify-center -mt-36">
             <img
-              src="src/ChatGPT Image Aug 18, 2025, 04_04_36 AM.png"
+              src="/ChatGPT Image Aug 18, 2025, 04_04_36 AM.png"
               alt="hero"
               className="w-[80vw] rounded-lg"
             />
