@@ -23,7 +23,7 @@ const cleanAndParseJSON = (rawText) => {
     .replace(/```/g, "")
     .trim();
 
-  return JSON.parse(cleanedText);
+  return JSON.parse(cleanedText)
 };
 
 // ✅ Generate interview questions
@@ -42,7 +42,7 @@ const generateInterviewQuestions = async (req, res) => {
     const result = await model.generateContent(prompt);
     const rawText = result.response.text();
 
-    const data = cleanAndParseJSON(rawText);
+    const data = cleanAndParseJSON(rawText)
     res.status(200).json(data);
   } catch (error) {
     console.error("❌ generateInterviewQuestions Error:", error);
