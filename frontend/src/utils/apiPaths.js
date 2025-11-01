@@ -1,5 +1,8 @@
 export const BASE_URL = import.meta.env.VITE_BASE_URL;
 
+// Add this debug log
+console.log('API Base URL:', BASE_URL);
+
 export const API_PATHS = {
   AUTH: {
     REGISTER: `${BASE_URL}/api/auth/register`,

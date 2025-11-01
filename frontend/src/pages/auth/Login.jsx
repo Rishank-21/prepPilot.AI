@@ -32,14 +32,16 @@ const Login = ({ setCurrentPage }) => {
         email,
         password,
       });
-      const { token } = response.data;
+      console.log("Login response:", response); // Add this for debugging
+      const { token, user } = response.data;
       if (token) {
         localStorage.setItem("token", token);
-        updateUser(response.data);
+        updateUser({ token, user });
         navigate("/dashboard");
-        toast.success(`Welcome Back ${response.data.user.fullName}`)
+        toast.success(`Welcome Back ${user.fullName}`);
       }
     } catch (error) {
+      console.error("Login error:", error); // Add this for debugging
       if (error.response && error.response.data.message) {
         setError(error.response.data.message);
       } else {
@@ -70,7 +72,7 @@ const Login = ({ setCurrentPage }) => {
           label="Password"
         />
 
-        {error && <P className="text-red-500 text-xs pb-2.5">{error}</P>}
+        {error && <p className="text-red-500 text-xs pb-2.5">{error}</p>}
         <button type="submit" className="btn-primary">
           LOGIN
         </button>
