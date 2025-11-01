@@ -8,16 +8,7 @@ const app = express();
 
 const connectDB = require('./config/db');
 connectDB();
-app.use(
-  cors({
-    origin: [
-      "https://prep-pilot-ai-chi.vercel.app",
-      "http://localhost:5173",
-      "http://localhost:3000",
-    ],
-    credentials: true,
-  })
-);
+app.use(cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
