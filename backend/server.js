@@ -7,20 +7,7 @@ const cors = require('cors');
 const app = express();
 
 const connectDB = require('./config/db');
-
-// Add connection status check
-const mongoose = require('mongoose');
-mongoose.connection.on('disconnected', () => {
-  console.log('MongoDB disconnected');
-});
-
-mongoose.connection.on('error', (err) => {
-  console.error('MongoDB connection error:', err);
-});
-
-// Initialize connection
 connectDB();
-
 app.use(cors({
   origin: [ process.env.PRODUCTION_URL , process.env.FRONTEND_URL ],
   credentials: true,
