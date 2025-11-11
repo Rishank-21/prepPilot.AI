@@ -1,6 +1,8 @@
 import axios from "axios";
 import { BASE_URL } from "./apiPaths";
 
+console.log("BASE_URL from env:", BASE_URL); // Debug: Check if BASE_URL is loaded
+
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
   timeout: 30000,
@@ -13,7 +15,7 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
   (config) => {
-    console.log("Request URL:", config.url); // Add this for debugging
+    console.log("Full Request URL:", `${BASE_URL}${config.url}`); // Show full URL
     const accessToken = localStorage.getItem("token");
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
