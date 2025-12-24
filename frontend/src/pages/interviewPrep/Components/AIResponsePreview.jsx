@@ -1,12 +1,12 @@
 
-import React, { useState } from "react";
+import React, { useState, memo } from "react";
 import { LuCopy, LuCheck, LuCode } from "react-icons/lu";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 
-const AIResponsePreview = ({ content }) => {
+const AIResponsePreview = memo(({ content }) => {
   if (!content) return null;
 
   return (
@@ -63,9 +63,9 @@ const AIResponsePreview = ({ content }) => {
       </div>
     </div>
   );
-};
+});
 
-function CodeBlock({ code, language }) {
+const CodeBlock = memo(function CodeBlock({ code, language }) {
   const [copied, setCopied] = useState(false);
 
   const copyCode = () => {
@@ -118,8 +118,6 @@ function CodeBlock({ code, language }) {
       </SyntaxHighlighter>
     </div>
   );
-}
+});
 
 export default AIResponsePreview;
-
-AIResponsePreview.jsx

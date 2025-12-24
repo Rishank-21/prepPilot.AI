@@ -24,24 +24,29 @@ const InterviewPrep = () => {
   const [isLoading , setIsLoading] = useState(false);
   const [isUpdateLoader , setIsUpdateLoader] = useState(false);
 
-  const fetchSessionDetailsById = async () => {
+  const fetchSessionDetailsById = useCallback(async () => {
     try {
-      const response = await axiosInstance.get(API_PATHS.SESSION.GET_ONE(sessionId));
-      if(response.data && response.data.session) {
+      const response = await axiosInstance.get(
+        API_PATHS.SESSION.GET_ONE(sessionId)
+      );
+      if (response.data && response.data.session) {
         setSessionData(response.data.session);
       }
     } catch (error) {
-      console.error("Error:",error)
+      console.error("Error:", error);
     }
-  }
+  }, [sessionId]);
 
-  const generateConceptExplanation = async (question) => {
+  const generateConceptExplanation = useCallback(async (question) => {
     try {
-      setErrorMsg("")
-      setExplanation(null)
-      setIsLoading(true)
-      setOpenMoreLeanDrawer(true)
-      const response = await axiosInstance.post(API_PATHS.AI.GENERATE_EXPLANATION , { question });
+      setErrorMsg("");
+      setExplanation(null);
+      setIsLoading(true);
+      setOpenMoreLeanDrawer(true);
+      const response = await axiosInstance.post(
+        API_PATHS.AI.GENERATE_EXPLANATION,
+        { question }
+      );
       if (response.data && response.data.explanation) {
         setExplanation(response.data);
       }
@@ -51,52 +56,65 @@ const InterviewPrep = () => {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, []);
 
-  const toggleQuestionPicStatus = async (questionId) => {
-    try {
-      const response = await axiosInstance.post(API_PATHS.QUESTION.PIN(questionId));
-      if(response.data && response.data.question) {
-        fetchSessionDetailsById()
+  const toggleQuestionPicStatus = useCallback(
+    async (questionId) => {
+      try {
+        const response = await axiosInstance.post(
+          API_PATHS.QUESTION.PIN(questionId)
+        );
+        if (response.data && response.data.question) {
+          fetchSessionDetailsById();
+        }
+      } catch (error) {
+        console.error("Error:", error);
       }
-    } catch (error) {
-      console.error("Error:", error);
-    }
-  }
+    },
+    [fetchSessionDetailsById]
+  );
 
-  const uploadMoreQuestions = async () => {
+  const uploadMoreQuestions = useCallback(async () => {
     try {
       setIsUpdateLoader(true);
-      const aiResponse = await axiosInstance.post(API_PATHS.AI.GENERATE_QUESTIONS, {
-        role : sessionData?.role,
-        experience : sessionData?.experience,
-        topicsToFocus : sessionData?.topicsToFocus,
-        numberOfQuestions : 10
-      })
+      const aiResponse = await axiosInstance.post(
+        API_PATHS.AI.GENERATE_QUESTIONS,
+        {
+          role: sessionData?.role,
+          experience: sessionData?.experience,
+          topicsToFocus: sessionData?.topicsToFocus,
+          numberOfQuestions: 10,
+        }
+      );
 
-      const generatedQuestions = aiResponse.data
+      const generatedQuestions = aiResponse.data;
 
-      const  response = await axiosInstance.post(API_PATHS.QUESTION.ADD_TO_SESSION,{
-        sessionId,
-        questions: generatedQuestions
-      })
+      const response = await axiosInstance.post(
+        API_PATHS.QUESTION.ADD_TO_SESSION,
+        {
+          sessionId,
+          questions: generatedQuestions,
+        }
+      );
 
-      if(response.data) {
+      if (response.data) {
         toast.success("Questions added successfully");
-        fetchSessionDetailsById()
+        fetchSessionDetailsById();
       }
     } catch (error) {
-      setErrorMsg(error.response?.data?.message || "Failed to upload questions");
+      setErrorMsg(
+        error.response?.data?.message || "Failed to upload questions"
+      );
     } finally {
       setIsUpdateLoader(false);
     }
-  }
+  }, [sessionId, sessionData, fetchSessionDetailsById]);
 
   useEffect(() => {
-    if(sessionId) {
+    if (sessionId) {
       fetchSessionDetailsById();
     }
-  }, [sessionId])
+  }, [sessionId, fetchSessionDetailsById]);
 
   return (
     <DashboardLayout>

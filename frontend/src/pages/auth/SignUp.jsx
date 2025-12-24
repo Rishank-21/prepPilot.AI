@@ -8,67 +8,70 @@ import axiosInstance from '../../utils/axiosInstance'
 import { API_PATHS } from '../../utils/apiPaths'
 import uploadImage from '../../utils/uploadImage'
 import toast from 'react-hot-toast'
-const SignUp = ({setCurrentPage}) => {
-    const [profilePic , setProfilePic] = useState(null)
-    const [fullName , setFullName] = useState("")
-    const [email , setEmail] = useState("")
-    const [password , setPassword] = useState("")
+import SpinnerLoader from "../../components/loader/SpinnerLoader";
+const SignUp = ({ setCurrentPage }) => {
+  const [profilePic, setProfilePic] = useState(null);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-    const [error , setError] = useState(null)
+  const [error, setError] = useState(null);
 
-    const navigate = useNavigate()
+  const navigate = useNavigate();
 
-    const { updateUser } = useContext(UserContext)
+  const { updateUser } = useContext(UserContext);
 
-    const handleSignUp = async (e) => {
-        e.preventDefault()
+  const handleSignUp = async (e) => {
+    e.preventDefault();
 
-        let profileImageUrl = ""
-        if(!fullName){
-            setError("please enter full name")
-            return
-        }
-        if(!validateEmail(email)){
-            setError("please enter a valid email address.")
-            return
-        }
-        if(!password){
-            setError("please enter the password")
-            return
-        }
-
-        setError("")
-
-        try {
-            if(profilePic){
-                const imageUploadRes = await uploadImage(profilePic)
-                
-                profileImageUrl = imageUploadRes.imageUrl || ""
-            }
-            const response = await axiosInstance.post(API_PATHS.AUTH.REGISTER,{
-                fullName,
-                email,
-                password,
-                profileImageUrl
-            })
-
-          
-
-            const { token } = response.data
-            if(token){
-                localStorage.setItem("token", token)
-                updateUser(response.data)
-                navigate("/dashboard")
-                toast.success(`Welcome ${response.data.user.fullName}`)
-            }
-        } catch (error) {
-            if(error.response && error.response.data.message){
-                setError(error.response.data.message)
-            } else {
-                setError("something went wrong, please try again.")
-            }
-        }
+    let profileImageUrl = "";
+    if (!fullName) {
+      setError("please enter full name");
+      return;
     }
+    if (!validateEmail(email)) {
+      setError("please enter a valid email address.");
+      return;
+    }
+    if (!password) {
+      setError("please enter the password");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
+    try {
+      if (profilePic) {
+        const imageUploadRes = await uploadImage(profilePic);
+
+        profileImageUrl = imageUploadRes.imageUrl || "";
+      }
+      const response = await axiosInstance.post(API_PATHS.AUTH.REGISTER, {
+        fullName,
+        email,
+        password,
+        profileImageUrl,
+      });
+
+      const { token } = response.data;
+      if (token) {
+        localStorage.setItem("token", token);
+        updateUser(response.data);
+        navigate("/dashboard");
+        toast.success(`Welcome ${response.data.user.fullName}`);
+      }
+    } catch (error) {
+      if (error.response && error.response.data.message) {
+        setError(error.response.data.message);
+      } else {
+        setError("something went wrong, please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <div className="w-[90vw] md:w-[33vw] p-7 flex flex-col justify-center">
       <h3 className="text-lg font-semibold text-black ">Create An Account</h3>
@@ -101,8 +104,8 @@ const SignUp = ({setCurrentPage}) => {
           />
         </div>
         {error && <p className="text-red-500 textxs pb-2.5">{error}</p>}
-        <button type="submit" className="btn-primary">
-          SIGN UP
+        <button type="submit" className="btn-primary" disabled={loading}>
+          {loading ? <SpinnerLoader /> : "SIGN UP"}
         </button>
         <p className="text-[13px] text-slate-800 mt-3">
           Already have an account{" "}
@@ -117,6 +120,6 @@ const SignUp = ({setCurrentPage}) => {
       </form>
     </div>
   );
-}
+};
 
 export default SignUp
