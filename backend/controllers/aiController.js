@@ -4,26 +4,32 @@ const { questionAnswerPrompt, conceptExplainPrompt } = require("../utils/prompts
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-
-
-(async () => {
-  try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    const result = await model.generateContent("Say hello from Gemini!");
-    console.log("✅ Gemini says:", result.response.text());
-  } catch (err) {
-    console.error("❌ Gemini test failed:", err);
-  }
-})();
+// Test Gemini connection on startup (optional)
+if (process.env.NODE_ENV !== 'production') {
+  (async () => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const result = await model.generateContent("Say hello!");
+      console.log("✅ Gemini connected successfully");
+    } catch (err) {
+      console.error("❌ Gemini connection test failed:", err.message);
+    }
+  })();
+}
 
 // Utility to clean and parse the AI JSON output
 const cleanAndParseJSON = (rawText) => {
-  const cleanedText = rawText
-    .replace(/```json/i, "")
-    .replace(/```/g, "")
-    .trim();
+  try {
+    const cleanedText = rawText
+      .replace(/```json/i, "")
+      .replace(/```/g, "")
+      .trim();
 
-  return JSON.parse(cleanedText)
+    return JSON.parse(cleanedText);
+  } catch (error) {
+    console.error("❌ JSON Parse Error. Raw text:", rawText);
+    throw new Error("Failed to parse AI response as JSON");
+  }
 };
 
 // ✅ Generate interview questions
@@ -34,19 +40,35 @@ const generateInterviewQuestions = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    // Check if API key exists
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("❌ GEMINI_API_KEY not found in environment variables");
+      return res.status(500).json({ message: "API configuration error. Please contact support." });
+    }
+
     const prompt = questionAnswerPrompt(role, experience, topicsToFocus, numberOfQuestions);
 
-    // ✅ Updated model name (works on v1)
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    // ✅ Try with gemini-1.5-flash first (more stable)
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
+    console.log("🔄 Generating questions for role:", role);
     const result = await model.generateContent(prompt);
     const rawText = result.response.text();
+    console.log("✅ Received response from Gemini");
 
-    const data = cleanAndParseJSON(rawText)
+    const data = cleanAndParseJSON(rawText);
     res.status(200).json(data);
   } catch (error) {
     console.error("❌ generateInterviewQuestions Error:", error);
-    res.status(500).json({ message: "Failed to generate questions", error: error.message });
+    console.error("Error details:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    res.status(500).json({ 
+      message: "Failed to generate questions. Please try again.", 
+      error: error.message 
+    });
   }
 };
 
@@ -58,19 +80,35 @@ const generateConceptExplanation = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    // Check if API key exists
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("❌ GEMINI_API_KEY not found in environment variables");
+      return res.status(500).json({ message: "API configuration error. Please contact support." });
+    }
+
     const prompt = conceptExplainPrompt(question);
 
-    // ✅ Use a supported model — gemini-1.5-flash is faster and available
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    // ✅ Use gemini-1.5-flash (more stable)
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
+    console.log("🔄 Generating explanation for question:", question.substring(0, 50) + "...");
     const result = await model.generateContent(prompt);
     const rawText = result.response.text();
+    console.log("✅ Received explanation from Gemini");
 
     const data = cleanAndParseJSON(rawText);
     res.status(200).json(data);
   } catch (error) {
     console.error("❌ generateConceptExplanation Error:", error);
-    res.status(500).json({ message: "Failed to generate explanation", error: error.message });
+    console.error("Error details:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    res.status(500).json({ 
+      message: "Failed to generate explanation. Please try again.", 
+      error: error.message 
+    });
   }
 };
 

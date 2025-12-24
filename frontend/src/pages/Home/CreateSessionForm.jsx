@@ -44,6 +44,7 @@ const CreateSessionForm = () => {
           experience,
           topicsToFocus,
           numberOfQuestions: 10,
+          description,
         }
       );
 
