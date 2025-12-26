@@ -192,113 +192,85 @@ const generateWithGroq = async (prompt, systemPrompt, maxTokens = 4096) => {
   }
 };
 
-// ✅ Generate interview questions
-const generateInterviewQuestions = async (req, res) => {
-  console.log("\n" + "=".repeat(60));
-  console.log("🎯 Generate Interview Questions Request");
-  console.log("=".repeat(60));
+// 🆕 Enhanced parser specifically for explanations
+const parseExplanationResponse = (rawText) => {
+  console.log("📝 Parsing explanation response...");
+  console.log("📊 Response length:", rawText.length, "characters");
+  
+  try {
+    // Try direct parse first
+    const parsed = JSON.parse(rawText);
+    if (parsed.title && parsed.explanation) {
+      console.log("✅ Direct parse successful!");
+      return parsed;
+    }
+    throw new Error("Missing required fields");
+  } catch (error) {
+    console.log("⚠️ Direct parse failed:", error.message);
+  }
 
   try {
-    const userId = req.user._id;
+    // Remove markdown code blocks
+    let cleaned = rawText
+      .replace(/```javascript\n?/gi, "```javascript\n")
+      .replace(/```js\n?/gi, "```javascript\n")
+      .replace(/```json\n?/gi, "")
+      .replace(/```\n?/g, "")
+      .trim();
 
-    // Rate limiting: 5 sessions per hour
-    if (isRateLimited(userId, 5)) {
-      console.log("⛔ Rate limit hit for user:", userId);
-      return res.status(429).json({
-        success: false,
-        message: "Too many requests. You can create 5 sessions per hour.",
-        error: "RATE_LIMIT_EXCEEDED",
-        retryAfter: 3600,
-      });
-    }
-
-    // Validate input
-    const { role, experience, topicsToFocus, numberOfQuestions } = req.body;
+    // Try parsing cleaned version
+    const parsed = JSON.parse(cleaned);
+    console.log("✅ Cleanup parse successful!");
+    return parsed;
+  } catch (secondError) {
+    console.log("⚠️ Standard cleanup failed:", secondError.message);
     
-    console.log("📋 Request params:", {
-      role,
-      experience,
-      topicsToFocus,
-      numberOfQuestions,
-    });
+    try {
+      // Advanced cleanup for malformed JSON
+      let fixed = rawText
+        .replace(/```javascript\n?/gi, "```javascript\n")
+        .replace(/```js\n?/gi, "```javascript\n")
+        .replace(/```json\n?/gi, "")
+        .replace(/```\n?/g, "")
+        .trim();
 
-    if (!role || !experience || !topicsToFocus || !numberOfQuestions) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields",
-        requiredFields: ["role", "experience", "topicsToFocus", "numberOfQuestions"],
-      });
+      // Fix common JSON issues
+      // 1. Remove trailing commas before closing brackets
+      fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+      
+      // 2. Ensure array has closing bracket if missing
+      if (fixed.startsWith('[') && !fixed.endsWith(']')) {
+        console.log("⚠️ Missing closing bracket, attempting fix...");
+        // Find last complete object
+        const lastBraceIndex = fixed.lastIndexOf('}');
+        if (lastBraceIndex !== -1) {
+          fixed = fixed.substring(0, lastBraceIndex + 1) + '\n]';
+          console.log("🔧 Added closing bracket");
+        }
+      }
+      
+      // 3. Ensure object has closing brace if missing
+      if (fixed.startsWith('{') && !fixed.endsWith('}')) {
+        console.log("⚠️ Missing closing brace, attempting fix...");
+        fixed = fixed + '\n}';
+        console.log("🔧 Added closing brace");
+      }
+
+      const parsed = JSON.parse(fixed);
+      console.log("✅ Advanced fix successful!");
+      return parsed;
+    } catch (finalError) {
+      console.error("❌ All parsing attempts failed");
+      console.error("Parse error:", finalError.message);
+      console.error("Response length:", rawText.length);
+      console.error("First 500 chars:", rawText.substring(0, 500));
+      console.error("Last 500 chars:", rawText.substring(Math.max(0, rawText.length - 500)));
+      throw new Error("Failed to parse AI response as valid JSON");
     }
-
-    // Use your original prompt (already perfect!)
-    const prompt = questionAnswerPrompt(
-      role,
-      experience,
-      topicsToFocus,
-      numberOfQuestions
-    );
-
-    // Simple system prompt - just tell AI what it is
-    const systemPrompt = "You are a helpful AI assistant that generates technical interview questions. Always return valid JSON.";
-
-    // Generate with Groq (with retry logic)
-    const result = await generateWithRetry(prompt, systemPrompt, 4096, 3);
-
-    console.log("✅ SUCCESS - Questions generated");
-    console.log("=".repeat(60) + "\n");
-
-    return res.status(200).json({
-      success: true,
-      data: result.data,
-      provider: result.provider,
-      model: result.model,
-    });
-  } catch (error) {
-    console.error("💥 ERROR:", error.message);
-    console.log("=".repeat(60) + "\n");
-
-    // Handle Groq rate limits
-    if (error.message.includes("rate_limit") || error.message.includes("429")) {
-      return res.status(429).json({
-        success: false,
-        message: "API rate limit reached. Please wait a moment and try again.",
-        error: "API_RATE_LIMIT",
-      });
-    }
-
-    // Handle authentication errors
-    if (
-      error.message.includes("401") ||
-      error.message.includes("authentication") ||
-      error.message.includes("API key")
-    ) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid API key. Please check your Groq API configuration.",
-        error: "INVALID_API_KEY",
-      });
-    }
-
-    // Handle JSON parsing errors
-    if (error.message.includes("parse") || error.message.includes("JSON")) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to parse AI response. Please try again.",
-        error: "PARSE_ERROR",
-        hint: "The AI generated malformed JSON. Retrying should work.",
-      });
-    }
-
-    // Generic error
-    return res.status(500).json({
-      success: false,
-      message: "Failed to generate questions. Please try again.",
-      error: error.message,
-    });
   }
 };
 
-
+// Generate content with Groq (WITHOUT strict JSON mode)
 const generateConceptExplanation = async (req, res) => {
   console.log("\n" + "=".repeat(60));
   console.log("🎯 Generate Concept Explanation Request");

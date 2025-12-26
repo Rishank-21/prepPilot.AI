@@ -28,33 +28,30 @@ Important: Do NOT add any extra text. Only return valid JSON.
 };
 
 const conceptExplainPrompt = (question) => {
-  return `
-You are an AI assistant that explains technical interview concepts.
+  return `You are an expert technical interviewer. Explain this question clearly.
 
-Your task:
-1. Explain this interview question: "${question}"
-2. Provide a clear, beginner-friendly explanation
-3. Include code examples if relevant
-4. Create a short descriptive title
+QUESTION: "${question}"
 
-CRITICAL: You MUST return ONLY a valid JSON object in this EXACT format:
+Create a JSON response with EXACTLY this structure (no extra text before or after):
 {
-  "title": "Short descriptive title here",
-  "explanation": "Your detailed explanation here with markdown formatting if needed"
+  "title": "One sentence title (max 50 chars)",
+  "explanation": "Your explanation here with code examples"
 }
 
-Rules:
-- Do NOT include any text before or after the JSON
-- Do NOT use markdown code blocks like \`\`\`json
-- Do NOT add comments
-- The explanation can include markdown formatting (headings, code blocks, lists, etc.)
-- Keep the title under 60 characters
-- Make sure all quotes are properly escaped
+RULES FOR EXPLANATION:
+1. Start with a simple definition
+2. Explain why it matters
+3. If code is needed, use this format EXACTLY:
+   \`\`\`javascript
+   // code here
+   \`\`\`
+4. Use markdown: **bold**, *italic*, - lists
+5. Keep it beginner-friendly but comprehensive
+6. No text before or after the JSON object
+7. All quotes in the explanation must use single quotes or be escaped
+8. Maximum 1500 characters for explanation
 
-Return ONLY the JSON object, nothing else.
-  `;
+RETURN ONLY THE JSON OBJECT, NOTHING ELSE.`;
 };
-
-// ...existing code...
 
 module.exports = { questionAnswerPrompt, conceptExplainPrompt };
