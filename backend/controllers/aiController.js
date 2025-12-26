@@ -298,7 +298,7 @@ const generateInterviewQuestions = async (req, res) => {
   }
 };
 
-// ✅ Generate concept explanation
+
 const generateConceptExplanation = async (req, res) => {
   console.log("\n" + "=".repeat(60));
   console.log("🎯 Generate Concept Explanation Request");
