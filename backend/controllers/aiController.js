@@ -301,24 +301,80 @@ const generateConceptExplanation = async (req, res) => {
       });
     }
 
-    // Use your original prompt
+    // Use improved prompt
     const prompt = conceptExplainPrompt(question);
 
-    // Simple system prompt
-    const systemPrompt = "You are a helpful AI assistant that explains technical concepts. Always return valid JSON.";
+    // Enhanced system prompt
+    const systemPrompt = `You are a technical expert. Always respond with ONLY a valid JSON object containing "title" and "explanation" fields. No extra text.`;
 
-    // Generate with Groq (with retry logic)
-    const result = await generateWithRetry(prompt, systemPrompt, 2048, 3);
+    console.log("🟢 [GROQ] Generating explanation...");
 
-    console.log("✅ SUCCESS - Explanation generated");
-    console.log("=".repeat(60) + "\n");
+    // Generate with retry logic specifically for explanations
+    let lastError = null;
+    const maxRetries = 3;
 
-    return res.status(200).json({
-      success: true,
-      data: result.data,
-      provider: result.provider,
-      model: result.model,
-    });
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 Attempt ${attempt}/${maxRetries}`);
+
+        const completion = await groq.chat.completions.create({
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          model: "llama-3.3-70b-versatile",
+          temperature: 0.1, // Very low for consistency
+          max_tokens: 2048,
+          top_p: 0.85,
+        });
+
+        const rawText = completion.choices[0].message.content;
+        console.log("✅ [GROQ] Response received");
+        console.log("📊 Response size:", rawText.length, "characters");
+
+        // Use specialized explanation parser
+        const parsedData = parseExplanationResponse(rawText);
+
+        console.log("✅ Parsed explanation with title:", parsedData.title);
+        console.log("✅ SUCCESS - Explanation generated");
+        console.log("=".repeat(60) + "\n");
+
+        return res.status(200).json({
+          success: true,
+          data: parsedData,
+          provider: "groq",
+          model: "llama-3.3-70b-versatile",
+        });
+      } catch (error) {
+        lastError = error;
+        console.error(`❌ Attempt ${attempt} failed:`, error.message);
+
+        // Don't retry on authentication errors
+        if (
+          error.message.includes("401") ||
+          error.message.includes("API key")
+        ) {
+          throw error;
+        }
+
+        // Wait before retry (exponential backoff)
+        if (attempt < maxRetries) {
+          const waitTime = 1000 * attempt;
+          console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
+        }
+      }
+    }
+    
+    // All retries failed
+    throw lastError;
+    
   } catch (error) {
     console.error("💥 ERROR:", error.message);
     console.log("=".repeat(60) + "\n");
@@ -345,12 +401,13 @@ const generateConceptExplanation = async (req, res) => {
       });
     }
 
-    // Handle JSON parsing errors
+    // Handle JSON parsing errors with helpful message
     if (error.message.includes("parse") || error.message.includes("JSON")) {
       return res.status(500).json({
         success: false,
-        message: "Failed to parse AI response. Please try again.",
+        message: "Failed to parse AI response. The question might be too complex. Try a different one.",
         error: "PARSE_ERROR",
+        hint: "Try refreshing and asking again, or try a different question.",
       });
     }
 
