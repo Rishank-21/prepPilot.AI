@@ -1,20 +1,20 @@
-// Install both: npm install groq-sdk @google/generative-ai
+// GROQ-ONLY VERSION - Simple & Working
+// Install: npm install groq-sdk
 
 const Groq = require("groq-sdk");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 const {
   questionAnswerPrompt,
   conceptExplainPrompt,
 } = require("../utils/prompts");
 
-// Initialize both AI clients
+// Initialize Groq client
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+console.log("✅ Groq AI Controller initialized");
 
-// Simple rate limiting store
+// Rate limiting
 const requestCounts = new Map();
 
 const isRateLimited = (userId, limit = 5, windowMs = 3600000) => {
@@ -34,24 +34,43 @@ const isRateLimited = (userId, limit = 5, windowMs = 3600000) => {
   return false;
 };
 
-// Parse JSON response
+// Clean rate limit cache every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of requestCounts.entries()) {
+    const keyTime = parseInt(key.split(':')[1]) * 3600000;
+    if (now - keyTime > 3600000) {
+      requestCounts.delete(key);
+    }
+  }
+}, 3600000);
+
+// JSON parser with robust error handling
 const cleanAndParseJSON = (rawText) => {
   try {
+    // Try direct parse first
     return JSON.parse(rawText);
   } catch (error) {
-    const cleanedText = rawText
-      .replace(/```json/gi, "")
-      .replace(/```/g, "")
-      .trim();
-    return JSON.parse(cleanedText);
+    try {
+      // Clean markdown formatting
+      const cleanedText = rawText
+        .replace(/```json\n?/gi, "")
+        .replace(/```\n?/g, "")
+        .trim();
+      return JSON.parse(cleanedText);
+    } catch (secondError) {
+      console.error("❌ JSON Parse Error");
+      console.error("Raw response:", rawText.substring(0, 500));
+      throw new Error("Failed to parse AI response as JSON");
+    }
   }
 };
 
-// 🆕 Generate content with Groq (Primary)
+// Generate content with Groq
 const generateWithGroq = async (prompt, systemPrompt, maxTokens = 4096) => {
+  console.log("🟢 [GROQ] Generating content...");
+  
   try {
-    console.log("🟢 Trying Groq API...");
-    
     const completion = await groq.chat.completions.create({
       messages: [
         {
@@ -63,134 +82,66 @@ const generateWithGroq = async (prompt, systemPrompt, maxTokens = 4096) => {
           content: prompt,
         },
       ],
-      model: "llama-3.3-70b-versatile",
+      model: "llama-3.3-70b-versatile", // Best free model
       temperature: 0.7,
       max_tokens: maxTokens,
-      response_format: { type: "json_object" },
+      response_format: { type: "json_object" }, // Force JSON
     });
 
     const rawText = completion.choices[0].message.content;
-    console.log("✅ Groq API Success!");
+    console.log("✅ [GROQ] Success!");
+
     return {
       success: true,
       data: cleanAndParseJSON(rawText),
       provider: "groq",
+      model: "llama-3.3-70b-versatile",
     };
   } catch (error) {
-    console.error("❌ Groq API Failed:", error.message);
+    console.error("❌ [GROQ] Error:", error.message);
     throw error;
   }
 };
 
-// 🆕 Generate content with Gemini (Fallback)
-const generateWithGemini = async (prompt, maxTokens = 2048) => {
-  try {
-    console.log("🔵 Trying Gemini API (Fallback)...");
-    
-    // Try multiple Gemini models in order of preference
-    const models = [
-      "gemini-2.5-flash-lite-preview", // Best free option
-      "gemini-1.5-flash",              // Stable fallback
-      "gemini-pro",                    // Last resort
-    ];
-
-    let lastError = null;
-
-    for (const modelName of models) {
-      try {
-        console.log(`  → Trying model: ${modelName}`);
-        
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: maxTokens,
-          },
-        });
-
-        const result = await model.generateContent(prompt);
-        const rawText = result.response.text();
-        
-        console.log(`✅ Gemini API Success with ${modelName}!`);
-        return {
-          success: true,
-          data: cleanAndParseJSON(rawText),
-          provider: `gemini-${modelName}`,
-        };
-      } catch (modelError) {
-        console.error(`  ✗ ${modelName} failed:`, modelError.message);
-        lastError = modelError;
-        continue; // Try next model
-      }
-    }
-
-    // If all models failed
-    throw lastError || new Error("All Gemini models failed");
-  } catch (error) {
-    console.error("❌ Gemini API Failed:", error.message);
-    throw error;
-  }
-};
-
-// 🆕 Smart AI Generator with automatic fallback
-const generateWithFallback = async (prompt, systemPrompt, maxTokens = 4096) => {
-  let primaryError = null;
-  let fallbackError = null;
-
-  // Try Groq first (free & fast)
-  if (process.env.GROQ_API_KEY) {
-    try {
-      return await generateWithGroq(prompt, systemPrompt, maxTokens);
-    } catch (error) {
-      primaryError = error;
-      console.log("⚠️ Groq failed, trying Gemini...");
-    }
-  }
-
-  // Fallback to Gemini
-  if (process.env.GEMINI_API_KEY) {
-    try {
-      return await generateWithGemini(prompt, maxTokens);
-    } catch (error) {
-      fallbackError = error;
-    }
-  }
-
-  // Both failed
-  throw new Error(
-    `Both AI providers failed. Groq: ${primaryError?.message || "Not configured"}. Gemini: ${fallbackError?.message || "Not configured"}`
-  );
-};
-
-// ✅ Generate interview questions with fallback
+// ✅ Generate interview questions
 const generateInterviewQuestions = async (req, res) => {
+  console.log("\n" + "=".repeat(60));
+  console.log("🎯 Generate Interview Questions Request");
+  console.log("=".repeat(60));
+
   try {
     const userId = req.user._id;
 
-    // Rate limiting: 5 requests per hour per user
+    // Rate limiting: 5 sessions per hour
     if (isRateLimited(userId, 5)) {
+      console.log("⛔ Rate limit hit for user:", userId);
       return res.status(429).json({
         success: false,
-        message: "Too many requests. Please try again later.",
-        limit: "5 sessions per hour",
+        message: "Too many requests. You can create 5 sessions per hour.",
+        error: "RATE_LIMIT_EXCEEDED",
+        retryAfter: 3600, // seconds
       });
     }
 
+    // Validate input
     const { role, experience, topicsToFocus, numberOfQuestions } = req.body;
+    
+    console.log("📋 Request params:", {
+      role,
+      experience,
+      topicsToFocus,
+      numberOfQuestions,
+    });
 
     if (!role || !experience || !topicsToFocus || !numberOfQuestions) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields",
-        requiredFields: [
-          "role",
-          "experience",
-          "topicsToFocus",
-          "numberOfQuestions",
-        ],
+        requiredFields: ["role", "experience", "topicsToFocus", "numberOfQuestions"],
       });
     }
 
+    // Generate prompt
     const prompt = questionAnswerPrompt(
       role,
       experience,
@@ -198,29 +149,44 @@ const generateInterviewQuestions = async (req, res) => {
       numberOfQuestions
     );
 
-    const systemPrompt =
-      "You are an expert technical interview question generator. Always respond with valid JSON only. No extra text or explanations.";
+    const systemPrompt = `You are an expert technical interview question generator. 
+Generate exactly ${numberOfQuestions} interview questions for a ${role} position with ${experience} years of experience.
+Focus on: ${topicsToFocus}
+Respond ONLY with valid JSON in this exact format:
+[
+  {
+    "question": "Question text here?",
+    "answer": "Detailed answer here."
+  }
+]
+Do not include any text outside the JSON array.`;
 
-    // Use fallback system
-    const result = await generateWithFallback(prompt, systemPrompt, 4096);
+    // Generate with Groq
+    const result = await generateWithGroq(prompt, systemPrompt, 4096);
 
-    res.status(200).json({
+    console.log("✅ SUCCESS - Questions generated");
+    console.log("=".repeat(60) + "\n");
+
+    return res.status(200).json({
       success: true,
       data: result.data,
-      provider: result.provider, // Shows which AI was used
+      provider: result.provider,
+      model: result.model,
     });
   } catch (error) {
-    console.error("❌ All AI providers failed:", error.message);
+    console.error("💥 ERROR:", error.message);
+    console.log("=".repeat(60) + "\n");
 
-    // Check for specific error types
+    // Handle Groq rate limits
     if (error.message.includes("rate_limit") || error.message.includes("429")) {
       return res.status(429).json({
         success: false,
-        message: "API rate limit reached. Please try again in a few minutes.",
-        error: "RATE_LIMIT_EXCEEDED",
+        message: "API rate limit reached. Please wait a moment and try again.",
+        error: "API_RATE_LIMIT",
       });
     }
 
+    // Handle authentication errors
     if (
       error.message.includes("401") ||
       error.message.includes("authentication") ||
@@ -228,43 +194,52 @@ const generateInterviewQuestions = async (req, res) => {
     ) {
       return res.status(401).json({
         success: false,
-        message: "Invalid API keys. Please check your configuration.",
+        message: "Invalid API key. Please check your Groq API configuration.",
         error: "INVALID_API_KEY",
       });
     }
 
-    if (error.message.includes("quota")) {
-      return res.status(429).json({
+    // Handle JSON parsing errors
+    if (error.message.includes("parse") || error.message.includes("JSON")) {
+      return res.status(500).json({
         success: false,
-        message: "API quota exceeded for all providers. Please try again later.",
-        error: "QUOTA_EXCEEDED",
-        suggestion: "Consider upgrading to a paid plan or wait for quota reset.",
+        message: "Failed to parse AI response. Please try again.",
+        error: "PARSE_ERROR",
       });
     }
 
-    res.status(500).json({
+    // Generic error
+    return res.status(500).json({
       success: false,
-      message: "Failed to generate questions with all AI providers",
+      message: "Failed to generate questions. Please try again.",
       error: error.message,
     });
   }
 };
 
-// ✅ Generate concept explanation with fallback
+// ✅ Generate concept explanation
 const generateConceptExplanation = async (req, res) => {
+  console.log("\n" + "=".repeat(60));
+  console.log("🎯 Generate Concept Explanation Request");
+  console.log("=".repeat(60));
+
   try {
     const userId = req.user._id;
 
-    // Rate limiting: 10 requests per hour per user
+    // Rate limiting: 10 explanations per hour
     if (isRateLimited(userId, 10)) {
+      console.log("⛔ Rate limit hit for user:", userId);
       return res.status(429).json({
         success: false,
-        message: "Too many requests. Please try again later.",
-        limit: "10 explanations per hour",
+        message: "Too many requests. You can generate 10 explanations per hour.",
+        error: "RATE_LIMIT_EXCEEDED",
+        retryAfter: 3600,
       });
     }
 
+    // Validate input
     const { question } = req.body;
+    console.log("📋 Question:", question);
 
     if (!question) {
       return res.status(400).json({
@@ -273,30 +248,44 @@ const generateConceptExplanation = async (req, res) => {
       });
     }
 
+    // Generate prompt
     const prompt = conceptExplainPrompt(question);
 
-    const systemPrompt =
-      "You are an expert technical interviewer explaining concepts to beginners. Always respond with valid JSON only.";
+    const systemPrompt = `You are an expert technical interviewer explaining concepts to beginners.
+Explain the following interview question in depth with examples.
+Respond ONLY with valid JSON in this exact format:
+{
+  "title": "Short descriptive title",
+  "explanation": "Detailed explanation with examples and code if needed"
+}
+Do not include any text outside the JSON object.`;
 
-    // Use fallback system
-    const result = await generateWithFallback(prompt, systemPrompt, 2048);
+    // Generate with Groq
+    const result = await generateWithGroq(prompt, systemPrompt, 2048);
 
-    res.status(200).json({
+    console.log("✅ SUCCESS - Explanation generated");
+    console.log("=".repeat(60) + "\n");
+
+    return res.status(200).json({
       success: true,
       data: result.data,
-      provider: result.provider, // Shows which AI was used
+      provider: result.provider,
+      model: result.model,
     });
   } catch (error) {
-    console.error("❌ All AI providers failed:", error.message);
+    console.error("💥 ERROR:", error.message);
+    console.log("=".repeat(60) + "\n");
 
+    // Handle rate limits
     if (error.message.includes("rate_limit") || error.message.includes("429")) {
       return res.status(429).json({
         success: false,
-        message: "API rate limit reached. Please try again in a few minutes.",
-        error: "RATE_LIMIT_EXCEEDED",
+        message: "API rate limit reached. Please wait a moment and try again.",
+        error: "API_RATE_LIMIT",
       });
     }
 
+    // Handle authentication errors
     if (
       error.message.includes("401") ||
       error.message.includes("authentication") ||
@@ -304,25 +293,30 @@ const generateConceptExplanation = async (req, res) => {
     ) {
       return res.status(401).json({
         success: false,
-        message: "Invalid API keys. Please check your configuration.",
+        message: "Invalid API key. Please check your Groq API configuration.",
         error: "INVALID_API_KEY",
       });
     }
 
-    if (error.message.includes("quota")) {
-      return res.status(429).json({
+    // Handle JSON parsing errors
+    if (error.message.includes("parse") || error.message.includes("JSON")) {
+      return res.status(500).json({
         success: false,
-        message: "API quota exceeded for all providers. Please try again later.",
-        error: "QUOTA_EXCEEDED",
+        message: "Failed to parse AI response. Please try again.",
+        error: "PARSE_ERROR",
       });
     }
 
-    res.status(500).json({
+    // Generic error
+    return res.status(500).json({
       success: false,
-      message: "Failed to generate explanation with all AI providers",
+      message: "Failed to generate explanation. Please try again.",
       error: error.message,
     });
   }
 };
 
-module.exports = { generateInterviewQuestions, generateConceptExplanation };
+module.exports = {
+  generateInterviewQuestions,
+  generateConceptExplanation,
+};
