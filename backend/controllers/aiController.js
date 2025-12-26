@@ -363,6 +363,112 @@ const generateConceptExplanation = async (req, res) => {
   }
 };
 
+// ✅ Generate interview questions
+const generateInterviewQuestions = async (req, res) => {
+  console.log("\n" + "=".repeat(60));
+  console.log("🎯 Generate Interview Questions Request");
+  console.log("=".repeat(60));
+
+  try {
+    const userId = req.user._id;
+
+    // Rate limiting: 5 sessions per hour
+    if (isRateLimited(userId, 5)) {
+      console.log("⛔ Rate limit hit for user:", userId);
+      return res.status(429).json({
+        success: false,
+        message: "Too many requests. You can create 5 sessions per hour.",
+        error: "RATE_LIMIT_EXCEEDED",
+        retryAfter: 3600,
+      });
+    }
+
+    // Validate input
+    const { role, experience, topicsToFocus, numberOfQuestions } = req.body;
+    
+    console.log("📋 Request params:", {
+      role,
+      experience,
+      topicsToFocus,
+      numberOfQuestions,
+    });
+
+    if (!role || !experience || !topicsToFocus || !numberOfQuestions) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+        requiredFields: ["role", "experience", "topicsToFocus", "numberOfQuestions"],
+      });
+    }
+
+    // Use your original prompt (already perfect!)
+    const prompt = questionAnswerPrompt(
+      role,
+      experience,
+      topicsToFocus,
+      numberOfQuestions
+    );
+
+    // Simple system prompt - just tell AI what it is
+    const systemPrompt = "You are a helpful AI assistant that generates technical interview questions. Always return valid JSON.";
+
+    // Generate with Groq (with retry logic)
+    const result = await generateWithRetry(prompt, systemPrompt, 4096, 3);
+
+    console.log("✅ SUCCESS - Questions generated");
+    console.log("=".repeat(60) + "\n");
+
+    return res.status(200).json({
+      success: true,
+      data: result.data,
+      provider: result.provider,
+      model: result.model,
+    });
+  } catch (error) {
+    console.error("💥 ERROR:", error.message);
+    console.log("=".repeat(60) + "\n");
+
+    // Handle Groq rate limits
+    if (error.message.includes("rate_limit") || error.message.includes("429")) {
+      return res.status(429).json({
+        success: false,
+        message: "API rate limit reached. Please wait a moment and try again.",
+        error: "API_RATE_LIMIT",
+      });
+    }
+
+    // Handle authentication errors
+    if (
+      error.message.includes("401") ||
+      error.message.includes("authentication") ||
+      error.message.includes("API key")
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid API key. Please check your Groq API configuration.",
+        error: "INVALID_API_KEY",
+      });
+    }
+
+    // Handle JSON parsing errors
+    if (error.message.includes("parse") || error.message.includes("JSON")) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to parse AI response. Please try again.",
+        error: "PARSE_ERROR",
+        hint: "The AI generated malformed JSON. Retrying should work.",
+      });
+    }
+
+    // Generic error
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate questions. Please try again.",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   generateInterviewQuestions,
   generateConceptExplanation,
