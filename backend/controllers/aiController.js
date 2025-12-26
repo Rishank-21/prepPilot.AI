@@ -1,12 +1,20 @@
+// Install both: npm install groq-sdk @google/generative-ai
+
+const Groq = require("groq-sdk");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const {
   questionAnswerPrompt,
   conceptExplainPrompt,
 } = require("../utils/prompts");
 
+// Initialize both AI clients
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Simple rate limiting store (use Redis in production)
+// Simple rate limiting store
 const requestCounts = new Map();
 
 const isRateLimited = (userId, limit = 5, windowMs = 3600000) => {
@@ -26,72 +34,135 @@ const isRateLimited = (userId, limit = 5, windowMs = 3600000) => {
   return false;
 };
 
-// Utility to clean and parse the AI JSON output
+// Parse JSON response
 const cleanAndParseJSON = (rawText) => {
   try {
+    return JSON.parse(rawText);
+  } catch (error) {
     const cleanedText = rawText
-      .replace(/```json/i, "")
+      .replace(/```json/gi, "")
       .replace(/```/g, "")
       .trim();
-
     return JSON.parse(cleanedText);
-  } catch (parseError) {
-    console.error("❌ JSON Parse Error:", parseError.message);
-    console.error("Raw text:", rawText);
-    throw new Error("Failed to parse AI response as JSON");
   }
 };
 
-// 🆕 Enhanced error handler for Gemini API errors
-const handleGeminiError = (error, res) => {
-  console.error("❌ Gemini API Error:", error.message);
-
-  // Quota exceeded error
-  if (error.message.includes("429") || error.message.includes("quota")) {
-    // Extract retry time if available
-    const retryMatch = error.message.match(/retry in ([\d.]+)s/);
-    const retryAfter = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
-
-    return res.status(429).json({
-      success: false,
-      message: "API quota exceeded. Please try again later.",
-      error: "QUOTA_EXCEEDED",
-      retryAfter: retryAfter,
-      suggestions: [
-        "Wait a few minutes and try again",
-        "Consider upgrading your Google AI plan",
-        "Check your usage at https://ai.dev/usage"
-      ]
+// 🆕 Generate content with Groq (Primary)
+const generateWithGroq = async (prompt, systemPrompt, maxTokens = 4096) => {
+  try {
+    console.log("🟢 Trying Groq API...");
+    
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.7,
+      max_tokens: maxTokens,
+      response_format: { type: "json_object" },
     });
-  }
 
-  // Rate limit error
-  if (error.message.includes("rate limit")) {
-    return res.status(429).json({
-      success: false,
-      message: "Rate limit exceeded. Please slow down your requests.",
-      error: "RATE_LIMIT_EXCEEDED"
-    });
+    const rawText = completion.choices[0].message.content;
+    console.log("✅ Groq API Success!");
+    return {
+      success: true,
+      data: cleanAndParseJSON(rawText),
+      provider: "groq",
+    };
+  } catch (error) {
+    console.error("❌ Groq API Failed:", error.message);
+    throw error;
   }
-
-  // Invalid API key
-  if (error.message.includes("API key") || error.message.includes("401")) {
-    return res.status(401).json({
-      success: false,
-      message: "Invalid API key. Please check your configuration.",
-      error: "INVALID_API_KEY"
-    });
-  }
-
-  // Generic error
-  return res.status(500).json({
-    success: false,
-    message: "Failed to generate content. Please try again.",
-    error: error.message
-  });
 };
 
-// ✅ Generate interview questions with retry logic
+// 🆕 Generate content with Gemini (Fallback)
+const generateWithGemini = async (prompt, maxTokens = 2048) => {
+  try {
+    console.log("🔵 Trying Gemini API (Fallback)...");
+    
+    // Try multiple Gemini models in order of preference
+    const models = [
+      "gemini-2.5-flash-lite-preview", // Best free option
+      "gemini-1.5-flash",              // Stable fallback
+      "gemini-pro",                    // Last resort
+    ];
+
+    let lastError = null;
+
+    for (const modelName of models) {
+      try {
+        console.log(`  → Trying model: ${modelName}`);
+        
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: maxTokens,
+          },
+        });
+
+        const result = await model.generateContent(prompt);
+        const rawText = result.response.text();
+        
+        console.log(`✅ Gemini API Success with ${modelName}!`);
+        return {
+          success: true,
+          data: cleanAndParseJSON(rawText),
+          provider: `gemini-${modelName}`,
+        };
+      } catch (modelError) {
+        console.error(`  ✗ ${modelName} failed:`, modelError.message);
+        lastError = modelError;
+        continue; // Try next model
+      }
+    }
+
+    // If all models failed
+    throw lastError || new Error("All Gemini models failed");
+  } catch (error) {
+    console.error("❌ Gemini API Failed:", error.message);
+    throw error;
+  }
+};
+
+// 🆕 Smart AI Generator with automatic fallback
+const generateWithFallback = async (prompt, systemPrompt, maxTokens = 4096) => {
+  let primaryError = null;
+  let fallbackError = null;
+
+  // Try Groq first (free & fast)
+  if (process.env.GROQ_API_KEY) {
+    try {
+      return await generateWithGroq(prompt, systemPrompt, maxTokens);
+    } catch (error) {
+      primaryError = error;
+      console.log("⚠️ Groq failed, trying Gemini...");
+    }
+  }
+
+  // Fallback to Gemini
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      return await generateWithGemini(prompt, maxTokens);
+    } catch (error) {
+      fallbackError = error;
+    }
+  }
+
+  // Both failed
+  throw new Error(
+    `Both AI providers failed. Groq: ${primaryError?.message || "Not configured"}. Gemini: ${fallbackError?.message || "Not configured"}`
+  );
+};
+
+// ✅ Generate interview questions with fallback
 const generateInterviewQuestions = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -101,18 +172,22 @@ const generateInterviewQuestions = async (req, res) => {
       return res.status(429).json({
         success: false,
         message: "Too many requests. Please try again later.",
-        error: "USER_RATE_LIMIT",
-        limit: "5 sessions per hour"
+        limit: "5 sessions per hour",
       });
     }
 
     const { role, experience, topicsToFocus, numberOfQuestions } = req.body;
-    
+
     if (!role || !experience || !topicsToFocus || !numberOfQuestions) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
         message: "Missing required fields",
-        requiredFields: ["role", "experience", "topicsToFocus", "numberOfQuestions"]
+        requiredFields: [
+          "role",
+          "experience",
+          "topicsToFocus",
+          "numberOfQuestions",
+        ],
       });
     }
 
@@ -123,30 +198,59 @@ const generateInterviewQuestions = async (req, res) => {
       numberOfQuestions
     );
 
-    // 🆕 Try gemini-1.5-flash first (more stable free tier)
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-      }
-    });
+    const systemPrompt =
+      "You are an expert technical interview question generator. Always respond with valid JSON only. No extra text or explanations.";
 
-    const result = await model.generateContent(prompt);
-    const rawText = result.response.text();
+    // Use fallback system
+    const result = await generateWithFallback(prompt, systemPrompt, 4096);
 
-    const data = cleanAndParseJSON(rawText);
-    
     res.status(200).json({
       success: true,
-      data: data
+      data: result.data,
+      provider: result.provider, // Shows which AI was used
     });
   } catch (error) {
-    return handleGeminiError(error, res);
+    console.error("❌ All AI providers failed:", error.message);
+
+    // Check for specific error types
+    if (error.message.includes("rate_limit") || error.message.includes("429")) {
+      return res.status(429).json({
+        success: false,
+        message: "API rate limit reached. Please try again in a few minutes.",
+        error: "RATE_LIMIT_EXCEEDED",
+      });
+    }
+
+    if (
+      error.message.includes("401") ||
+      error.message.includes("authentication") ||
+      error.message.includes("API key")
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid API keys. Please check your configuration.",
+        error: "INVALID_API_KEY",
+      });
+    }
+
+    if (error.message.includes("quota")) {
+      return res.status(429).json({
+        success: false,
+        message: "API quota exceeded for all providers. Please try again later.",
+        error: "QUOTA_EXCEEDED",
+        suggestion: "Consider upgrading to a paid plan or wait for quota reset.",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate questions with all AI providers",
+      error: error.message,
+    });
   }
 };
 
-// ✅ Generate concept explanation with improved error handling
+// ✅ Generate concept explanation with fallback
 const generateConceptExplanation = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -156,42 +260,68 @@ const generateConceptExplanation = async (req, res) => {
       return res.status(429).json({
         success: false,
         message: "Too many requests. Please try again later.",
-        error: "USER_RATE_LIMIT",
-        limit: "10 explanations per hour"
+        limit: "10 explanations per hour",
       });
     }
 
     const { question } = req.body;
-    
+
     if (!question) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Missing required field: question" 
+        message: "Missing required field: question",
       });
     }
 
     const prompt = conceptExplainPrompt(question);
 
-    // 🆕 Use gemini-1.5-flash
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 1024,
-      }
-    });
+    const systemPrompt =
+      "You are an expert technical interviewer explaining concepts to beginners. Always respond with valid JSON only.";
 
-    const result = await model.generateContent(prompt);
-    const rawText = result.response.text();
+    // Use fallback system
+    const result = await generateWithFallback(prompt, systemPrompt, 2048);
 
-    const data = cleanAndParseJSON(rawText);
-    
     res.status(200).json({
       success: true,
-      data: data
+      data: result.data,
+      provider: result.provider, // Shows which AI was used
     });
   } catch (error) {
-    return handleGeminiError(error, res);
+    console.error("❌ All AI providers failed:", error.message);
+
+    if (error.message.includes("rate_limit") || error.message.includes("429")) {
+      return res.status(429).json({
+        success: false,
+        message: "API rate limit reached. Please try again in a few minutes.",
+        error: "RATE_LIMIT_EXCEEDED",
+      });
+    }
+
+    if (
+      error.message.includes("401") ||
+      error.message.includes("authentication") ||
+      error.message.includes("API key")
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid API keys. Please check your configuration.",
+        error: "INVALID_API_KEY",
+      });
+    }
+
+    if (error.message.includes("quota")) {
+      return res.status(429).json({
+        success: false,
+        message: "API quota exceeded for all providers. Please try again later.",
+        error: "QUOTA_EXCEEDED",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate explanation with all AI providers",
+      error: error.message,
+    });
   }
 };
 
