@@ -48,12 +48,15 @@ setInterval(() => {
 // 🆕 Advanced JSON parser with auto-fix
 const cleanAndParseJSON = (rawText) => {
   console.log("📝 Parsing AI response...");
+  console.log("📊 Response length:", rawText.length, "characters");
   
   try {
     // Try direct parse first
-    return JSON.parse(rawText);
+    const parsed = JSON.parse(rawText);
+    console.log("✅ Direct parse successful!");
+    return parsed;
   } catch (error) {
-    console.log("⚠️ Direct parse failed, trying cleanup...");
+    console.log("⚠️ Direct parse failed:", error.message);
     
     try {
       // Remove markdown code blocks
@@ -63,9 +66,11 @@ const cleanAndParseJSON = (rawText) => {
         .trim();
 
       // Try parsing cleaned version
-      return JSON.parse(cleaned);
+      const parsed = JSON.parse(cleaned);
+      console.log("✅ Cleanup parse successful!");
+      return parsed;
     } catch (secondError) {
-      console.log("⚠️ Standard cleanup failed, trying advanced fixes...");
+      console.log("⚠️ Standard cleanup failed:", secondError.message);
       
       try {
         // Advanced cleanup for malformed JSON
@@ -80,29 +85,64 @@ const cleanAndParseJSON = (rawText) => {
         
         // 2. Ensure array has closing bracket if missing
         if (fixed.startsWith('[') && !fixed.endsWith(']')) {
+          console.log("⚠️ Missing closing bracket, attempting fix...");
           // Find last complete object
           const lastBraceIndex = fixed.lastIndexOf('}');
           if (lastBraceIndex !== -1) {
             fixed = fixed.substring(0, lastBraceIndex + 1) + '\n]';
+            console.log("🔧 Added closing bracket");
           }
         }
         
         // 3. Ensure object has closing brace if missing
         if (fixed.startsWith('{') && !fixed.endsWith('}')) {
+          console.log("⚠️ Missing closing brace, attempting fix...");
           fixed = fixed + '\n}';
+          console.log("🔧 Added closing brace");
         }
 
-        // 4. Fix escaped newlines in code blocks
-        fixed = fixed.replace(/\\n/g, '\\\\n');
-
-        return JSON.parse(fixed);
+        const parsed = JSON.parse(fixed);
+        console.log("✅ Advanced fix successful!");
+        return parsed;
       } catch (finalError) {
         console.error("❌ All parsing attempts failed");
-        console.error("Original response (first 1000 chars):", rawText.substring(0, 1000));
+        console.error("Parse error:", finalError.message);
+        console.error("Response length:", rawText.length);
+        console.error("First 500 chars:", rawText.substring(0, 500));
+        console.error("Last 500 chars:", rawText.substring(Math.max(0, rawText.length - 500)));
         throw new Error("Failed to parse AI response as valid JSON");
       }
     }
   }
+};
+
+// 🆕 Generate with automatic retry on parse failures
+const generateWithRetry = async (prompt, systemPrompt, maxTokens, maxRetries = 2) => {
+  let lastError = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔄 Attempt ${attempt}/${maxRetries}`);
+      return await generateWithGroq(prompt, systemPrompt, maxTokens);
+    } catch (error) {
+      lastError = error;
+      console.error(`❌ Attempt ${attempt} failed:`, error.message);
+      
+      // Don't retry on authentication errors
+      if (error.message.includes("401") || error.message.includes("API key")) {
+        throw error;
+      }
+      
+      // Wait before retry (exponential backoff)
+      if (attempt < maxRetries) {
+        const waitTime = 1000 * attempt; // 1s, 2s, 3s...
+        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+  }
+  
+  throw lastError;
 };
 
 // Generate content with Groq (WITHOUT strict JSON mode)
@@ -122,17 +162,27 @@ const generateWithGroq = async (prompt, systemPrompt, maxTokens = 4096) => {
         },
       ],
       model: "llama-3.3-70b-versatile",
-      temperature: 0.5, // Lower temperature for more consistent JSON
+      temperature: 0.3, // Even lower for more consistent JSON
       max_tokens: maxTokens,
-      // 🆕 REMOVED: response_format - let it generate freely, we'll parse it
+      top_p: 0.9, // Add top_p for better consistency
     });
 
     const rawText = completion.choices[0].message.content;
-    console.log("✅ [GROQ] Response received, parsing...");
+    console.log("✅ [GROQ] Response received");
+    console.log("📊 Response size:", rawText.length, "characters");
+
+    const parsedData = cleanAndParseJSON(rawText);
+    
+    // Validate the parsed data
+    if (Array.isArray(parsedData)) {
+      console.log("✅ Parsed as array with", parsedData.length, "items");
+    } else if (typeof parsedData === 'object') {
+      console.log("✅ Parsed as object with keys:", Object.keys(parsedData).join(', '));
+    }
 
     return {
       success: true,
-      data: cleanAndParseJSON(rawText),
+      data: parsedData,
       provider: "groq",
       model: "llama-3.3-70b-versatile",
     };
@@ -180,34 +230,19 @@ const generateInterviewQuestions = async (req, res) => {
       });
     }
 
-    // 🆕 Improved system prompt for better JSON output
-    const systemPrompt = `You are an expert technical interview question generator.
+    // Use your original prompt (already perfect!)
+    const prompt = questionAnswerPrompt(
+      role,
+      experience,
+      topicsToFocus,
+      numberOfQuestions
+    );
 
-CRITICAL INSTRUCTIONS:
-1. Generate EXACTLY ${numberOfQuestions} interview questions
-2. Output MUST be a valid JSON array
-3. Each question must have "question" and "answer" fields
-4. Do NOT add any text before or after the JSON
-5. Ensure all JSON brackets are properly closed
-6. Escape all special characters in answers (quotes, newlines, etc.)
+    // Simple system prompt - just tell AI what it is
+    const systemPrompt = "You are a helpful AI assistant that generates technical interview questions. Always return valid JSON.";
 
-Example format:
-[
-  {
-    "question": "What is React?",
-    "answer": "React is a JavaScript library for building user interfaces."
-  }
-]`;
-
-    const prompt = `Generate ${numberOfQuestions} interview questions for:
-Role: ${role}
-Experience: ${experience} years
-Topics: ${topicsToFocus}
-
-Return ONLY a valid JSON array. No explanations, no markdown, just pure JSON.`;
-
-    // Generate with Groq
-    const result = await generateWithGroq(prompt, systemPrompt, 4096);
+    // Generate with Groq (with retry logic)
+    const result = await generateWithRetry(prompt, systemPrompt, 4096, 3);
 
     console.log("✅ SUCCESS - Questions generated");
     console.log("=".repeat(60) + "\n");
@@ -294,30 +329,14 @@ const generateConceptExplanation = async (req, res) => {
       });
     }
 
-    // 🆕 Improved system prompt
-    const systemPrompt = `You are an expert technical interviewer explaining concepts to beginners.
+    // Use your original prompt
+    const prompt = conceptExplainPrompt(question);
 
-CRITICAL INSTRUCTIONS:
-1. Output MUST be a valid JSON object
-2. Must have "title" and "explanation" fields
-3. Do NOT add any text before or after the JSON
-4. Ensure all JSON brackets are properly closed
-5. Escape all special characters properly
+    // Simple system prompt
+    const systemPrompt = "You are a helpful AI assistant that explains technical concepts. Always return valid JSON.";
 
-Example format:
-{
-  "title": "Understanding Closures",
-  "explanation": "A closure is a function that has access to variables in its outer scope."
-}`;
-
-    const prompt = `Explain this interview question in detail:
-"${question}"
-
-Provide a beginner-friendly explanation with examples if needed.
-Return ONLY a valid JSON object. No markdown, just pure JSON.`;
-
-    // Generate with Groq
-    const result = await generateWithGroq(prompt, systemPrompt, 2048);
+    // Generate with Groq (with retry logic)
+    const result = await generateWithRetry(prompt, systemPrompt, 2048, 3);
 
     console.log("✅ SUCCESS - Explanation generated");
     console.log("=".repeat(60) + "\n");
