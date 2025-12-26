@@ -28,26 +28,21 @@ Important: Do NOT add any extra text. Only return valid JSON.
 };
 
 const conceptExplainPrompt = (question) => {
-  return `Explain this technical interview question clearly and concisely.
+  return `Explain this question: "${question}"
 
-QUESTION: "${question}"
-
-Return ONLY a JSON object with this structure:
+Output format (MUST be valid JSON):
 {
-  "title": "Brief title (max 50 characters)",
-  "explanation": "Clear explanation with code examples if needed"
+  "title": "Simple title",
+  "explanation": "Your explanation here. Use markdown for formatting."
 }
 
-RULES:
-- Start with a simple definition
-- Explain why it matters in interviews
-- If code helps, use markdown code blocks: \`\`\`javascript\ncode\n\`\`\`
-- Use markdown formatting: **bold**, *italic*, lists
-- Keep it under 1200 characters
-- NO text before or after the JSON
-- Escape all double quotes inside strings
-
-Return ONLY valid JSON, nothing else.`;
+Rules:
+1. Keep title short (under 50 chars)
+2. Explanation should be 500-1000 chars
+3. Use markdown: **bold**, *italic*, code blocks
+4. Only output the JSON, nothing else
+5. No markdown code fences (no \`\`\`json)
+6. Properly escape all quotes`;
 };
 
 module.exports = { questionAnswerPrompt, conceptExplainPrompt };
