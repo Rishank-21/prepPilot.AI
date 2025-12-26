@@ -37,7 +37,7 @@ const generateInterviewQuestions = async (req, res) => {
       numberOfQuestions
     );
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const result = await model.generateContent(prompt);
     const rawText = result.response.text();
@@ -45,7 +45,7 @@ const generateInterviewQuestions = async (req, res) => {
     const data = cleanAndParseJSON(rawText);
     res.status(200).json(data);
   } catch (error) {
-    console.error("❌ generateInterviewQuestions Error:", error);
+    console.error("❌ generateInterviewQuestions Error:", error.message);
     res
       .status(500)
       .json({ message: "Failed to generate questions", error: error.message });
@@ -62,7 +62,7 @@ const generateConceptExplanation = async (req, res) => {
 
     const prompt = conceptExplainPrompt(question);
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const result = await model.generateContent(prompt);
     const rawText = result.response.text();
@@ -70,13 +70,11 @@ const generateConceptExplanation = async (req, res) => {
     const data = cleanAndParseJSON(rawText);
     res.status(200).json(data);
   } catch (error) {
-    console.error("❌ generateConceptExplanation Error:", error);
-    res
-      .status(500)
-      .json({
-        message: "Failed to generate explanation",
-        error: error.message,
-      });
+    console.error("❌ generateConceptExplanation Error:", error.message);
+    res.status(500).json({
+      message: "Failed to generate explanation",
+      error: error.message,
+    });
   }
 };
 
