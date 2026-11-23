@@ -1,288 +1,68 @@
-import React, { useContext, useState } from "react";
-import { APP_FEATURES } from "../utils/data";
-import { useNavigate } from "react-router-dom";
-import { LuSparkles } from "react-icons/lu";
-import Modal from "../components/Modal";
-import Login from "./auth/Login";
-import Signup from "./auth/SignUp";
-import { UserContext } from "../contexts/UserContext";
-import ProfileInfoCard from "../components/cards/ProfileInfoCard";
+import { useContext } from "react";
+import { Link } from "react-router-dom";
+import { ArrowRight, BookOpen, Layers, Pin, PlaneTakeoff } from "lucide-react";
+import { UserContext } from "../contexts/userContext";
 
-const LandingPage = () => {
-  const navigate = useNavigate();
-  const [openAuthModel, setOpenAuthModel] = useState(false);
-  const [currentPage, setCurrentPage] = useState("login");
+const features = [
+  [Layers, "Practice by role", "Generate interview questions based on your target role, experience, and topics."],
+  [BookOpen, "Explore model answers", "Read sample answers and ask for a deeper explanation when a concept is unfamiliar."],
+  [Pin, "Revisit tricky questions", "Save your practice sessions and pin questions you want to review again."],
+];
+
+export default function LandingPage() {
   const { user } = useContext(UserContext);
 
-  const handleCTA = () => {
-    if (!user) {
-      setOpenAuthModel(true);
-    } else {
-      navigate("/dashboard");
-    }
-  };
   return (
-    <>
-      <div className="w-full min-h-full bg-[#fff3cf] ">
-        <div className="w-[500px] bg-amber-200/20 blur-[65px] absolute top-0 left-0"></div>
-        <div className="container mx-auto px-4 pt-6 pb-[200px] relative z-10">
-          <header className="flex justify-between items-center mb-20">
-            <div className="text-2xl md:text-3xl text-black font-extrabold tracking-tight">
-              PrepPilot.<span className="text-amber-600">AI</span>
-            </div>
-            {user ? (
-              <ProfileInfoCard />
-            ) : (
-              <button
-                className="bg-gradient-to-r from-[#FF9324] to-[#e99a4b] text-base md:text-lg font-semibold text-white px-8 py-3 rounded-full hover:bg-black hover:text-white border border-white transition-colors"
-                onClick={() => setOpenAuthModel(true)}
-              >
-                Login / Sign Up
-              </button>
-            )}
-          </header>
-          <div className="flex flex-col md:flex-row items-center">
-            <div className="w-full md:w-1/2 pr-4 mb-10 md:mb-2">
-              <div className="flex items-center justify-left mb-4">
-                <div className="flex items-center gap-2 text-sm md:text-[15px] text-amber-600 font-semibold bg-amber-100 px-3 py-1 rounded-full border border-amber-300">
-                  <LuSparkles /> AI Powered
-                </div>
-              </div>
-              <h1 className="text-4xl md:text-6xl text-black font-bold mb-6 leading-tight">
-                Level Up Your Future with <br />
-                <span className="text-transparent bg-clip-text bg-[radial-gradient(circle,_#FF9324_0%,_#FCD760_100%)] bg-[length:200%_200%] animate-text-shine font-extrabold">
-                  AI-Powered
-                </span>{" "}
-                Learning
-              </h1>
-            </div>
-            <div className="w-full md:w-1/2">
-              <p className="text-base md:text-lg text-gray-800 mr-0 md:mr-20 mb-8 leading-relaxed">
-                Practice role-specific questions, expand answers instantly, and dive deeper into key concepts — all in one place. From first prep to final mastery, your complete interview toolkit is here.
+    <div className="min-h-screen bg-[#f8f7f3] text-slate-950">
+      <header className="border-b border-slate-900/10">
+        <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5 sm:px-8" aria-label="Main navigation">
+          <Link to="/" className="flex items-center gap-2 text-xl font-extrabold tracking-tight">
+            <PlaneTakeoff size={22} aria-hidden="true" /> PrepPilot<span className="-ml-2 text-emerald-700">.AI</span>
+          </Link>
+          <Link className="rounded-lg border border-slate-900/20 px-4 py-2 text-sm font-bold hover:bg-white" to={user ? "/dashboard" : "/login"}>
+            {user ? "Dashboard" : "Log in"}
+          </Link>
+        </nav>
+      </header>
+      <main>
+        <section className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-14 sm:px-8 lg:grid-cols-[1fr_0.85fr] lg:py-24">
+          <div>
+            <p className="mb-4 text-sm font-bold tracking-wide text-emerald-800">AI interview practice</p>
+            <h1 className="max-w-xl text-5xl font-extrabold leading-[1.03] tracking-tight sm:text-7xl">
+              Practice for your <span className="text-emerald-800">next interview.</span>
+            </h1>
+            <p className="mt-6 max-w-md text-lg leading-relaxed text-slate-600">
+              Build a question set around the job you want. Work through sample answers at your pace and come back anytime.
+            </p>
+            <Link to={user ? "/dashboard" : "/signup"} className="action-button mt-8">
+              {user ? "Open dashboard" : "Start practicing"} <ArrowRight size={18} aria-hidden="true" />
+            </Link>
+          </div>
+          <div className="rounded-3xl bg-[#13382e] p-5 text-white shadow-xl shadow-emerald-950/15 sm:p-8">
+            <p className="text-sm font-bold text-emerald-200">Sample practice session</p>
+            <h2 className="mt-2 text-2xl font-bold">Frontend developer</h2>
+            <p className="mt-1 text-emerald-100">React · State management</p>
+            <div className="mt-6 rounded-2xl bg-white p-5 text-slate-900">
+              <p className="font-bold">When should state be lifted in React?</p>
+              <p className="mt-3 leading-relaxed text-slate-600">
+                Move shared state to the closest common parent so related components stay in sync.
               </p>
-              <button
-                className="bg-black text-base md:text-lg font-semibold text-white px-8 py-3 rounded-full hover:bg-yellow-100 hover:text-black border border-yellow-50 hover:border-yellow-300 transition-colors cursor-pointer"
-                onClick={handleCTA}
-              >
-                Get Started
-              </button>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="w-full min-h-full relative z-10 ">
-        <div>
-          <section className="flex items-center justify-center -mt-36">
-            <img
-              src="/ChatGPT Image Aug 18, 2025, 04_04_36 AM.png"
-              alt="hero"
-              className="w-[80vw] rounded-lg"
-            />
-          </section>
-        </div>
-        <div className="w-full min-h-full bg-[#FFFCEF] mt-10">
-          <div className="container mx-auto px-4 pt-10 pb-20">
-            <section className="mt-5">
-              <h2 className="text-2xl font-medium text-center mb-12">
-                Features That Make You Shine
-              </h2>
-              <div className="flex flex-col items-center gap-8">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full">
-                  {APP_FEATURES.slice(0, 3).map((feature) => (
-                    <div
-                      key={feature.id}
-                      className="bg-[#FFFEF8] p-6 rounded-xl shadow-xs hover:shadow-lg shadow-amber-100 transition border border-amber-100"
-                    >
-                      <h3 className="text-base font-semibold mb-3">
-                        {feature.title}
-                      </h3>
-                      <p className="text-gray-600">{feature.description}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {APP_FEATURES.slice(3).map((feature) => {
-                    <div
-                      key={feature.id}
-                      className="bg-[#FFFEF8] p-6 rounded-xl shadow-xs hover:shadow-lg shadow-amber-100 transition border border-amber-100"
-                    >
-                      <h3 className="text-base font-semibold mb-3">
-                        {feature.title}
-                      </h3>
-                      <p className="text-gray-600">{feature.description}</p>
-                    </div>;
-                  })}
-                </div>
-              </div>
-            </section>
-          </div>
-        </div>
-        <div className="text-sm text-secondary text-center p-5 mt-5 bg-black  text-white">
-         © 2025 perpPilot.AI. All rights reserved.
-        </div>
-      </div>
-
-      <Modal
-        isOpen={openAuthModel}
-        onClose={() => {
-          setOpenAuthModel(false);
-          setCurrentPage("login");
-        }}
-        hideHeader
-      >
-        <div>
-          {currentPage === "login" && <Login setCurrentPage={setCurrentPage} />}
-
-          {currentPage === "signup" && (
-            <Signup setCurrentPage={setCurrentPage} />
-          )}
-        </div>
-      </Modal>
-    </>
+        </section>
+        <section aria-label="Practice features" className="mx-auto grid max-w-6xl gap-4 px-5 pb-14 sm:px-8 md:grid-cols-3">
+          {features.map((feature) => {
+            const [Icon, title, description] = feature;
+            return (
+            <article key={title} className="rounded-2xl border border-slate-900/10 bg-white p-6">
+              <Icon size={22} className="text-emerald-800" aria-hidden="true" />
+              <h2 className="mt-4 text-lg font-extrabold">{title}</h2>
+              <p className="mt-2 leading-relaxed text-slate-600">{description}</p>
+            </article>
+            );
+          })}
+        </section>
+      </main>
+    </div>
   );
-};
-
-export default LandingPage;
-
-// import React, { useContext, useState } from 'react';
-// import { APP_FEATURES } from '../utils/data';
-// import { useNavigate } from 'react-router-dom';
-// import { LuSparkles } from 'react-icons/lu';
-// import Modal from '../components/Modal';
-// import Login from './auth/Login';
-// import Signup from './auth/SignUp';
-// import { UserContext } from '../contexts/UserContext';
-// import ProfileInfoCard from '../components/cards/ProfileInfoCard';
-
-// const LandingPage = () => {
-//   const navigate = useNavigate();
-//   const [openAuthModel, setOpenAuthModel] = useState(false);
-//   const [currentPage, setCurrentPage] = useState('login');
-//   const { user } = useContext(UserContext);
-
-//   const handleCTA = () => {
-//     if (!user) {
-//       setOpenAuthModel(true);
-//     } else {
-//       navigate('/dashboard');
-//     }
-//   };
-
-//   return (
-//     <>
-//       <div className="w-full min-h-full bg-[#fff3cf]">
-//         <div className="w-[500px] bg-amber-200/20 blur-[65px] absolute top-0 left-0" />
-//         <div className="container mx-auto px-4 pt-6 pb-[200px] relative z-10">
-//           <header className="flex justify-between items-center mb-16">
-//             <div className="text-xl text-black font-bold">InterView Prep AI</div>
-//             {user ? (
-//               <ProfileInfoCard />
-//             ) : (
-//               <button
-//                 className="bg-gradient-to-r from-[#FF9324] to-[#e99a4b] text-sm font-semibold text-white px-7 py-2.5 rounded-full hover:bg-black hover:text-white border border-white transition-colors"
-//                 onClick={() => setOpenAuthModel(true)}
-//               >
-//                 Login/Sign Up
-//               </button>
-//             )}
-//           </header>
-
-//           <div className="flex flex-col md:flex-row items-center">
-//             <div className="w-full md:w-1/2 pr-4 mb-8 md:mb-2">
-//               <div className="flex items-center justify-left mb-2">
-//                 <div className="flex items-center gap-2 text-[13px] text-amber-600 font-semibold bg-amber-100 px-3 py-1 rounded-full border border-amber-300">
-//                   <LuSparkles /> AI Powered
-//                 </div>
-//               </div>
-//               <h1 className="text-5xl text-black font-medium mb-6 leading-tight">
-//                 Ace Interviews with <br />
-//                 <span className="text-transparent bg-clip-text bg-[radial-gradient(circle,_#FF9324_0%,_#FCD760_100%)] bg-[length:200%_200%] animate-text-shine font-semibold">
-//                   AI-Powered
-//                 </span>{' '}
-//                 Learning
-//               </h1>
-//             </div>
-//             <div className="w-full md:w-1/2">
-//               <p className="text-[17px] text-gray-900 mr-0 md:mr-20 mb-6">
-//                 Get role-specific questions, expand answers when you need them, dive deeper into concepts, and organize everything your way. From preparation to mastery — your ultimate interview toolkit is here.
-//               </p>
-//               <button
-//                 className="bg-black text-sm font-semibold text-white px-7 py-2.5 rounded-full hover:bg-yellow-100 hover:text-black border border-yellow-50 hover:border-yellow-300 transition-colors"
-//                 onClick={handleCTA}
-//               >
-//                 Get Started
-//               </button>
-//             </div>
-//           </div>
-//         </div>
-//       </div>
-
-//       <div className="w-full min-h-full relative z-10">
-//         <section className="flex items-center justify-center -mt-36">
-//           {/* Replace with a real image in /public or an external URL */}
-//           <img
-//             src="https://placehold.co/1200x600?text=Interview+Prep+AI"
-//             alt="hero"
-//             className="w-[80vw] rounded-lg"
-//           />
-//         </section>
-
-//         <div className="w-full min-h-full bg-[#FFFCEF] mt-10">
-//           <div className="container mx-auto px-4 pt-10 pb-20">
-//             <section className="mt-5">
-//               <h2 className="text-2xl font-medium text-center mb-12">
-//                 Features That Make You Shine
-//               </h2>
-//               <div className="flex flex-col items-center gap-8">
-//                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full">
-//                   {APP_FEATURES.slice(0, 3).map((feature) => (
-//                     <div
-//                       key={feature.id}
-//                       className="bg-[#FFFEF8] p-6 rounded-xl shadow-xs hover:shadow-lg shadow-amber-100 transition border border-amber-100"
-//                     >
-//                       <h3 className="text-base font-semibold mb-3">{feature.title}</h3>
-//                       <p className="text-gray-600">{feature.description}</p>
-//                     </div>
-//                   ))}
-//                 </div>
-
-//                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
-//                   {APP_FEATURES.slice(3).map((feature) => (
-//                     <div
-//                       key={feature.id}
-//                       className="bg-[#FFFEF8] p-6 rounded-xl shadow-xs hover:shadow-lg shadow-amber-100 transition border border-amber-100"
-//                     >
-//                       <h3 className="text-base font-semibold mb-3">{feature.title}</h3>
-//                       <p className="text-gray-600">{feature.description}</p>
-//                     </div>
-//                   ))}
-//                 </div>
-//               </div>
-//             </section>
-//           </div>
-//         </div>
-
-//         <div className="text-sm bg-gray-50 text-secondary text-center p-5 mt-5">
-//           Made with ❤️... Happy Coding
-//         </div>
-//       </div>
-
-//       <Modal
-//         isOpen={openAuthModel}
-//         onClose={() => {
-//           setOpenAuthModel(false);
-//           setCurrentPage('login');
-//         }}
-//         hideHeader
-//       >
-//         <div>
-//           {currentPage === 'login' && <Login setCurrentPage={setCurrentPage} />}
-//           {currentPage === 'signup' && <Signup setCurrentPage={setCurrentPage} />}
-//         </div>
-//       </Modal>
-//     </>
-//   );
-// };
-
-// export default LandingPage;
+}

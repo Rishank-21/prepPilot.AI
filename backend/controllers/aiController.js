@@ -7,19 +7,27 @@ const {
   conceptExplainPrompt,
 } = require("../utils/prompts");
 
-// Initialize Groq client
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+let groq;
+const getGroq = () => {
+  groq ??= new Groq({
+    apiKey: process.env.GROQ_API_KEY,
+    timeout: 8000,
+    maxRetries: 0,
+  });
+  return groq;
+};
 
-console.log("✅ Groq AI Controller initialized");
+const aiUnavailable = (res) => res.status(503).json({
+  success: false,
+  message: "AI generation is temporarily unavailable. You can still use saved sessions.",
+});
 
 // Rate limiting
 const requestCounts = new Map();
 
-const isRateLimited = (userId, limit = 5, windowMs = 3600000) => {
+const isRateLimited = (userId, action, limit, windowMs = 3600000) => {
   const now = Date.now();
-  const key = `${userId}:${Math.floor(now / windowMs)}`;
+  const key = `${userId}:${action}:${Math.floor(now / windowMs)}`;
 
   if (!requestCounts.has(key)) {
     requestCounts.set(key, 0);
@@ -38,12 +46,12 @@ const isRateLimited = (userId, limit = 5, windowMs = 3600000) => {
 setInterval(() => {
   const now = Date.now();
   for (const [key] of requestCounts.entries()) {
-    const keyTime = parseInt(key.split(':')[1]) * 3600000;
+    const keyTime = Number(key.split(':').at(-1)) * 3600000;
     if (now - keyTime > 3600000) {
       requestCounts.delete(key);
     }
   }
-}, 3600000);
+}, 3600000).unref();
 
 // 🆕 Advanced JSON parser with auto-fix
 const cleanAndParseJSON = (rawText) => {
@@ -108,8 +116,6 @@ const cleanAndParseJSON = (rawText) => {
         console.error("❌ All parsing attempts failed");
         console.error("Parse error:", finalError.message);
         console.error("Response length:", rawText.length);
-        console.error("First 500 chars:", rawText.substring(0, 500));
-        console.error("Last 500 chars:", rawText.substring(Math.max(0, rawText.length - 500)));
         throw new Error("Failed to parse AI response as valid JSON");
       }
     }
@@ -150,7 +156,7 @@ const generateWithGroq = async (prompt, systemPrompt, maxTokens = 4096) => {
   console.log("🟢 [GROQ] Generating content...");
   
   try {
-    const completion = await groq.chat.completions.create({
+    const completion = await getGroq().chat.completions.create({
       messages: [
         {
           role: "system",
@@ -277,10 +283,11 @@ const generateConceptExplanation = async (req, res) => {
   console.log("=".repeat(60));
 
   try {
+    if (!process.env.GROQ_API_KEY?.trim()) return aiUnavailable(res);
     const userId = req.user._id;
 
     // Rate limiting: 10 explanations per hour
-    if (isRateLimited(userId, 10)) {
+    if (isRateLimited(userId, "explanation", 10)) {
       console.log("⛔ Rate limit hit for user:", userId);
       return res.status(429).json({
         success: false,
@@ -292,7 +299,6 @@ const generateConceptExplanation = async (req, res) => {
 
     // Validate input
     const { question } = req.body;
-    console.log("📋 Question:", question);
 
     if (!question) {
       return res.status(400).json({
@@ -317,7 +323,7 @@ const generateConceptExplanation = async (req, res) => {
       try {
         console.log(`🔄 Attempt ${attempt}/${maxRetries}`);
 
-        const completion = await groq.chat.completions.create({
+        const completion = await getGroq().chat.completions.create({
           messages: [
             {
               role: "system",
@@ -394,11 +400,7 @@ const generateConceptExplanation = async (req, res) => {
       error.message.includes("authentication") ||
       error.message.includes("API key")
     ) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid API key. Please check your Groq API configuration.",
-        error: "INVALID_API_KEY",
-      });
+      return aiUnavailable(res);
     }
 
     // Handle JSON parsing errors with helpful message
@@ -415,7 +417,6 @@ const generateConceptExplanation = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to generate explanation. Please try again.",
-      error: error.message,
     });
   }
 };
@@ -427,10 +428,11 @@ const generateInterviewQuestions = async (req, res) => {
   console.log("=".repeat(60));
 
   try {
+    if (!process.env.GROQ_API_KEY?.trim()) return aiUnavailable(res);
     const userId = req.user._id;
 
     // Rate limiting: 5 sessions per hour
-    if (isRateLimited(userId, 5)) {
+    if (isRateLimited(userId, "questions", 5)) {
       console.log("⛔ Rate limit hit for user:", userId);
       return res.status(429).json({
         success: false,
@@ -450,7 +452,7 @@ const generateInterviewQuestions = async (req, res) => {
       numberOfQuestions,
     });
 
-    if (!role || !experience || !topicsToFocus || !numberOfQuestions) {
+    if (!role || experience === undefined || experience === null || experience === "" || !topicsToFocus || !numberOfQuestions) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields",
@@ -500,11 +502,7 @@ const generateInterviewQuestions = async (req, res) => {
       error.message.includes("authentication") ||
       error.message.includes("API key")
     ) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid API key. Please check your Groq API configuration.",
-        error: "INVALID_API_KEY",
-      });
+      return aiUnavailable(res);
     }
 
     // Handle JSON parsing errors
@@ -521,7 +519,6 @@ const generateInterviewQuestions = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to generate questions. Please try again.",
-      error: error.message,
     });
   }
 };

@@ -104,7 +104,7 @@ exports.getMySessions = async (req, res) => {
 
 exports.getSessionById = async (req, res) => {
   try {
-    const session = await Session.findById(req.params.id)
+    const session = await Session.findOne({ _id: req.params.id, user: req.user._id })
       .populate({
         path: "questions",
         options: { sort: { isPinned: -1, createdAt: 1 } },
@@ -133,7 +133,7 @@ exports.getSessionById = async (req, res) => {
 
 exports.deleteSession = async (req, res) => {
   try {
-    const session = await Session.findById(req.params.id);
+    const session = await Session.findOne({ _id: req.params.id, user: req.user._id });
     
     if (!session) {
       return res.status(404).json({
@@ -142,13 +142,6 @@ exports.deleteSession = async (req, res) => {
       });
     }
     
-    if (session.user.toString() !== req.user._id.toString()) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authorized to delete this session"
-      });
-    }
-
     // Delete all questions associated with session
     await Question.deleteMany({ session: session._id });
 

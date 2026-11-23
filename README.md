@@ -1,28 +1,19 @@
 # prepPilot.AI
 
-**prepPilot.AI** is an AI-powered learning assistant designed to help students prepare for exams efficiently. It provides intelligent question generation, personalized study suggestions, and performance tracking using advanced AI models.
+PrepPilot.AI helps job candidates practice with questions tailored to a target role, experience level, and topics. Users can review answers and explanations, save sessions, and pin questions to revisit.
 
----
+The frontend uses React and Tailwind CSS. The backend uses Express, MongoDB, JWT authentication, and Groq.
 
-## 🚀 Features
+## Run locally
 
-- **AI Question Generator:** Automatically generates exam-style questions based on topics or subjects.
-- **Personalized Study Plan:** Suggests areas of focus based on user progress and performance.
-- **Topic-wise Analysis:** Provides detailed insights into strengths and weaknesses.
-- **User-friendly Dashboard:** Clean, interactive interface for managing study sessions.
+1. Copy `backend/.env.example` to `backend/.env`. Set `MONGO_URI` and a private `JWT_SECRET`. Set `GROQ_API_KEY` to enable question generation and explanations.
+2. In `backend`, run `npm ci` and `npm start`.
+3. In `frontend`, run `npm ci` and `npm run dev`. Open `http://localhost:5173`.
 
----
+Vite forwards API calls to port 5000 by default. Set `VITE_BASE_URL` before building the frontend to point to a different backend.
 
-## 💻 Tech Stack
+## Render and Vercel
 
-- **Frontend:** React, Tailwind CSS
-- **Backend:** Node.js, Express.js
-- **Database:** MongoDB
-- **AI/ML:**  GPT models
-- **Authentication:** JWT
-- **Deployment:** Vercel (frontend), Render (backend)
+Use `backend` as the Render root directory, `npm ci` as the build command and `npm start` as the start command. Use `/health` as the health-check path. It returns HTTP 200 when MongoDB and authentication are ready, or 503 while unavailable. Set `PRODUCTION_URL` to your Vercel site's origin.
 
----
-
-## 📁 Project Structure
-
+Use `frontend` as the Vercel root directory and set `VITE_BASE_URL` to your Render service origin. Redeploy the frontend after changing it.

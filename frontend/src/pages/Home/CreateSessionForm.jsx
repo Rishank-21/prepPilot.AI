@@ -26,9 +26,9 @@ const CreateSessionForm = () => {
 
   const handleCreateSession = async (e) => {
     e.preventDefault();
-    const { role, experience, topicsToFocus, description } = formData;
-    if (!role || !experience || !topicsToFocus) {
-      setError("Please fill all the fields");
+    const { role, experience, topicsToFocus } = formData;
+    if (!role.trim() || experience === "" || Number(experience) < 0 || !topicsToFocus.trim()) {
+      setError("Enter a role, topics, and zero or more years of experience.");
       return;
     }
 
@@ -53,9 +53,10 @@ const CreateSessionForm = () => {
       });
 
       if (response.data?.session?._id) {
-        setIsLoading(false);
         navigate(`/interview-prep/${response.data?.session?._id}`);
         toast.success("Session created successfully!");
+      } else {
+        setError("The server didn’t return a session. Please try again.");
       }
     } catch (error) {
       if (error.response && error.response.data.message) {
@@ -63,15 +64,13 @@ const CreateSessionForm = () => {
       } else {
         setError("Failed to create session");
       }
+    } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="w-[90vw] md:w-[35vw] p-7 flex flex-col justify-center">
-      <h3 className="text-lg font-semibold text-black">
-        Start a New Interview Journey
-      </h3>
+    <div className="w-full p-6 flex flex-col justify-center">
       <p className="text-xs text-slate-700 mt-[5px] mb-3">
         Fill out a few quick details and unlock your personalized set of
         interview questions!
@@ -101,12 +100,12 @@ const CreateSessionForm = () => {
         <Input
           value={formData.description}
           onChange={({ target }) => handleChange("description", target.value)}
-          label="Description"
+          label="Description (optional)"
           placeholder="(e.g. Briefly describe your experience)"
           type="text"
         />
 
-        {error && <p className="text-red-500 text-xs pb-2.5">{error}</p>}
+        {error && <p role="alert" className="text-red-700 text-xs pb-2.5">{error}</p>}
 
         <button
           type="submit"

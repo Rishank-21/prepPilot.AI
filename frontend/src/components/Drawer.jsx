@@ -25,6 +25,7 @@ import React from 'react';
 import { LuX } from 'react-icons/lu';
 
 const Drawer = ({ isOpen, onClose, title, children }) => {
+  if (!isOpen) return null;
   return (
     <div
       className={`fixed top-[64px] right-0 z-40 h-[calc(100dvh-64px)] p-4 overflow-y-auto transition-transform bg-white w-full md:w-[40vw] shadow-2xl shadow-cyan-800/10 border-r border-l-gray-800 ${
@@ -43,6 +44,7 @@ const Drawer = ({ isOpen, onClose, title, children }) => {
         </h5>
         <button
           type="button"
+          aria-label="Close explanation"
           onClick={onClose}
           className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 inline-flex items-center justify-center"
         >

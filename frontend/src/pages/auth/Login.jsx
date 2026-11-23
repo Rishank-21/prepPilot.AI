@@ -4,11 +4,11 @@ import Input from "../../components/inputs/Input";
 import { validateEmail } from "../../utils/helper";
 import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
-import { UserContext } from "../../contexts/UserContext";
+import { UserContext } from "../../contexts/userContext";
 import toast from "react-hot-toast";
 import SpinnerLoader from "../../components/loader/SpinnerLoader";
 
-const Login = ({ setCurrentPage }) => {
+const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,16 +35,13 @@ const Login = ({ setCurrentPage }) => {
         email,
         password,
       });
-      console.log("Login response:", response); // Add this for debugging
       const { token, user } = response.data;
       if (token) {
-        localStorage.setItem("token", token);
         updateUser({ token, user });
         navigate("/dashboard");
         toast.success(`Welcome Back ${user.fullName}`);
       }
     } catch (error) {
-      console.error("Login error:", error); // Add this for debugging
       if (error.response && error.response.data.message) {
         setError(error.response.data.message);
       } else {
@@ -56,8 +53,8 @@ const Login = ({ setCurrentPage }) => {
   };
 
   return (
-    <div className="W-[90vw] md:w-[33vw] p-7 flex flex-col justify-center">
-      <h3 className="text-lg font-semibold text-black">Welcome Back</h3>
+    <div className="w-full p-7 flex flex-col justify-center">
+      <h1 className="text-lg font-semibold text-black">Welcome back</h1>
       <p className="text-xs text-slate-700 mt-[15px] mb-6">
         Please enter your details to log in
       </p>
@@ -66,8 +63,8 @@ const Login = ({ setCurrentPage }) => {
           type="text"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          label="john@example.com"
+          placeholder="john@example.com"
+          label="Email address"
         />
         <Input
           type="password"
@@ -77,7 +74,7 @@ const Login = ({ setCurrentPage }) => {
           label="Password"
         />
 
-        {error && <p className="text-red-500 text-xs pb-2.5">{error}</p>}
+        {error && <p role="alert" className="text-red-700 text-xs pb-2.5">{error}</p>}
         <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? <SpinnerLoader /> : "LOGIN"}
         </button>
@@ -87,7 +84,7 @@ const Login = ({ setCurrentPage }) => {
             type="button"
             className="font-medium text-primary underline cursor-pointer"
             onClick={() => {
-              setCurrentPage("signup");
+              navigate("/signup");
             }}
           >
             SignUp

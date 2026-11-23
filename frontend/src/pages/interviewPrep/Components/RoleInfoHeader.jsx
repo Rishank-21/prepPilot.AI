@@ -1,41 +1,14 @@
-import React from 'react'
-
-const RoleInfoHeader = ({ role , topicsToFocus , experience , questions , description , lastUpdated }) => {
+export default function RoleInfoHeader({ role, topicsToFocus, experience, questions, description, lastUpdated }) {
   return (
-    <div className='bg-white relative'>
-        <div className='container mx-auto px-10 md:px-0'>
-            <div className='h-[200px] flex flex-col justify-center relative z-10'>
-                <div className='flex items-center'>
-                    <div className='flex-grow'> 
-                        <div className='flex justify-between items-start'>
-                            <div>
-                                <h2 className='text-2xl font-medium'>{role}</h2>
-                                <p className='text-sm text-gray-900 mt-1 text-medium'>{topicsToFocus}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div className='flex items-center gap-3 mt-4'>
-                    <div className='text-[10px] font-semibold text-white bg-black px-3 py-1 rounded-full'>
-                        Experience : {experience} { experience > 1 ? "years" : "year"}
-                    </div>
-                    <div className='text-[10px] font-semibold text-white bg-black px-3 py-1 rounded-full'>
-                        {questions} Q&A
-                    </div>
-                    <div className='text-[10px] font-semibold text-white bg-black px-3 py-1 rounded-full'>
-                        Last Updated : {lastUpdated}
-                    </div>
-                </div>
-            </div>
-            <div className='w-[40vw] md:w-[30vw] h-[200px] flex items-center justify-center bg-white overflow-hidden absolute top-0 right-0'>
-                <div className='w-16 h-16 blur-[65px] bg-lime-400 animate-blob1'></div>
-                <div className='w-16 h-16 blur-[65px] bg-teal-400 animate-blob2'></div>
-                <div className='w-16 h-16 blur-[45px] bg-cyan-300 animate-blob3'></div>
-                <div className='w-16 h-16 blur-[45px] bg-fuchsia-200 animate-blob1'></div>
-            </div>
-        </div>
-    </div>
-  )
+    <header className="rounded-2xl bg-[#13382e] p-6 text-white sm:p-8">
+      <h1 className="break-words text-3xl font-extrabold tracking-tight">{role}</h1>
+      <p className="mt-2 break-words text-emerald-100">{topicsToFocus}</p>
+      {description && <p className="mt-3 break-words">{description}</p>}
+      <ul className="mt-5 flex flex-wrap gap-2 text-sm text-emerald-50">
+        <li className="rounded-full bg-white/10 px-3 py-1">{experience} {Number(experience) === 1 ? "year" : "years"} of experience</li>
+        <li className="rounded-full bg-white/10 px-3 py-1">{questions} {questions === 1 ? "question" : "questions"}</li>
+        {lastUpdated && <li className="rounded-full bg-white/10 px-3 py-1">Updated {lastUpdated}</li>}
+      </ul>
+    </header>
+  );
 }
-
-export default RoleInfoHeader

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useCallback, useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import moment from "moment";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion as Motion } from "framer-motion";
 import { LuCircleAlert, LuListCollapse } from "react-icons/lu";
 import SpinnerLoader from "../../components/loader/SpinnerLoader";
 import { toast } from "react-hot-toast";
@@ -17,24 +17,26 @@ import SkeletonLoader from "../../components/loader/SkeletonLoader";
 const InterviewPrep = () => {
   const { sessionId } = useParams();
   const [sessionData, setSessionData] = useState(null);
+  const [sessionError, setSessionError] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [openLeanMoreDrawer, setOpenMoreLeanDrawer] = useState(false);
   const [explanation, setExplanation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdateLoader, setIsUpdateLoader] = useState(false);
 
-  const fetchSessionDetailsById = async () => {
+  const fetchSessionDetailsById = useCallback(async (signal) => {
+    setSessionError("");
     try {
       const response = await axiosInstance.get(
-        API_PATHS.SESSION.GET_ONE(sessionId)
+        API_PATHS.SESSION.GET_ONE(sessionId), { signal }
       );
       if (response.data && response.data.session) {
         setSessionData(response.data.session);
       }
     } catch (error) {
-      console.error("Error:", error);
+      if (!signal?.aborted) setSessionError(error.response?.data?.message || "Couldn’t load this session.");
     }
-  };
+  }, [sessionId]);
 
   const generateConceptExplanation = async (question) => {
     try {
@@ -119,18 +121,25 @@ const InterviewPrep = () => {
   };
 
   useEffect(() => {
-    if (sessionId) {
-      fetchSessionDetailsById();
-    }
-  }, [sessionId]);
+    const controller = new AbortController();
+    fetchSessionDetailsById(controller.signal);
+    return () => controller.abort();
+  }, [fetchSessionDetailsById]);
 
   return (
     <DashboardLayout>
+      <Link to="/dashboard" className="mb-4 inline-block font-bold text-emerald-800 hover:underline">Back to sessions</Link>
+      {sessionError ? (
+        <div className="page-status">
+          <p role="alert">{sessionError}</p>
+          <button className="action-button mt-4" onClick={() => fetchSessionDetailsById()}>Retry</button>
+        </div>
+      ) : !sessionData ? <p className="page-status" role="status">Loading questions…</p> : <>
       <RoleInfoHeader
         role={sessionData?.role || ""}
         topicsToFocus={sessionData?.topicsToFocus || ""}
-        experience={sessionData?.experience || "-"}
-        questions={sessionData?.questions?.length || "-"}
+        experience={sessionData?.experience ?? "-"}
+        questions={sessionData?.questions?.length ?? 0}
         description={sessionData?.description || ""}
         lastUpdated={
           sessionData?.updatedAt
@@ -145,12 +154,12 @@ const InterviewPrep = () => {
         <div className="grid grid-cols-12 gap-4 mt-5 mb-10">
           <div
             className={`col-span-12 ${
-              openLeanMoreDrawer ? "md:col-span-7" : "md:col-span-8"
+              openLeanMoreDrawer ? "md:col-span-7" : "md:col-span-12"
             }`}
           >
             <AnimatePresence>
               {sessionData?.questions?.map((data, index) => (
-                <motion.div
+                <Motion.div
                   key={data._id || index}
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -197,7 +206,7 @@ const InterviewPrep = () => {
                         </button>
                       </div>
                     )}
-                </motion.div>
+                </Motion.div>
               ))}
             </AnimatePresence>
           </div>
@@ -207,10 +216,10 @@ const InterviewPrep = () => {
         <Drawer
           isOpen={openLeanMoreDrawer}
           onClose={() => setOpenMoreLeanDrawer(false)}
-          title={!isLoading && explanation?.title}
+          title={explanation?.title || "Concept explanation"}
         >
           {errorMsg && (
-            <p className="flex gap-2 text-sm text-amber-600 font-medium">
+            <p role="alert" className="flex gap-2 text-sm text-amber-800 font-medium">
               <LuCircleAlert className="mt-1" /> {errorMsg}
             </p>
           )}
@@ -220,6 +229,7 @@ const InterviewPrep = () => {
           )}
         </Drawer>
       </div>
+      </>}
     </DashboardLayout>
   );
 };
