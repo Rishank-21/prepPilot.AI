@@ -1,529 +1,124 @@
-// GROQ AI CONTROLLER - Fixed JSON Parsing
-// Install: npm install groq-sdk
+const { Type } = require("@google/genai");
+const { questionAnswerPrompt, conceptExplainPrompt } = require("../utils/prompts");
+const { getGeminiModel, generateGeminiJson } = require("../utils/gemini");
 
-const Groq = require("groq-sdk");
-const {
-  questionAnswerPrompt,
-  conceptExplainPrompt,
-} = require("../utils/prompts");
-
-let groq;
-const getGroq = () => {
-  groq ??= new Groq({
-    apiKey: process.env.GROQ_API_KEY,
-    timeout: 8000,
-    maxRetries: 0,
-  });
-  return groq;
-};
-
-const aiUnavailable = (res) => res.status(503).json({
-  success: false,
-  message: "AI generation is temporarily unavailable. You can still use saved sessions.",
-});
-
-// Rate limiting
+const hourMs = 60 * 60 * 1000;
 const requestCounts = new Map();
 
-const isRateLimited = (userId, action, limit, windowMs = 3600000) => {
-  const now = Date.now();
-  const key = `${userId}:${action}:${Math.floor(now / windowMs)}`;
-
-  if (!requestCounts.has(key)) {
-    requestCounts.set(key, 0);
-  }
-
-  const count = requestCounts.get(key);
-  if (count >= limit) {
-    return true;
-  }
-
-  requestCounts.set(key, count + 1);
-  return false;
-};
-
-// Clean rate limit cache every hour
 setInterval(() => {
-  const now = Date.now();
-  for (const [key] of requestCounts.entries()) {
-    const keyTime = Number(key.split(':').at(-1)) * 3600000;
-    if (now - keyTime > 3600000) {
-      requestCounts.delete(key);
-    }
+  const currentHour = Math.floor(Date.now() / hourMs);
+  for (const [key, { hour }] of requestCounts) {
+    if (hour < currentHour) requestCounts.delete(key);
   }
-}, 3600000).unref();
+}, hourMs).unref();
 
-// 🆕 Advanced JSON parser with auto-fix
-const cleanAndParseJSON = (rawText) => {
-  console.log("📝 Parsing AI response...");
-  console.log("📊 Response length:", rawText.length, "characters");
-  
-  try {
-    // Try direct parse first
-    const parsed = JSON.parse(rawText);
-    console.log("✅ Direct parse successful!");
-    return parsed;
-  } catch (error) {
-    console.log("⚠️ Direct parse failed:", error.message);
-    
-    try {
-      // Remove markdown code blocks
-      let cleaned = rawText
-        .replace(/```json\n?/gi, "")
-        .replace(/```\n?/g, "")
-        .trim();
+function reserveRequest(userId, action, limit) {
+  const key = `${userId}:${action}`;
+  const hour = Math.floor(Date.now() / hourMs);
+  const previous = requestCounts.get(key);
+  const count = previous?.hour === hour ? previous.count : 0;
+  if (count >= limit) return Math.ceil(((hour + 1) * hourMs - Date.now()) / 1000);
 
-      // Try parsing cleaned version
-      const parsed = JSON.parse(cleaned);
-      console.log("✅ Cleanup parse successful!");
-      return parsed;
-    } catch (secondError) {
-      console.log("⚠️ Standard cleanup failed:", secondError.message);
-      
-      try {
-        // Advanced cleanup for malformed JSON
-        let fixed = rawText
-          .replace(/```json\n?/gi, "")
-          .replace(/```\n?/g, "")
-          .trim();
+  requestCounts.set(key, { hour, count: count + 1 });
+  return 0;
+}
 
-        // Fix common JSON issues
-        // 1. Remove trailing commas before closing brackets
-        fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
-        
-        // 2. Ensure array has closing bracket if missing
-        if (fixed.startsWith('[') && !fixed.endsWith(']')) {
-          console.log("⚠️ Missing closing bracket, attempting fix...");
-          // Find last complete object
-          const lastBraceIndex = fixed.lastIndexOf('}');
-          if (lastBraceIndex !== -1) {
-            fixed = fixed.substring(0, lastBraceIndex + 1) + '\n]';
-            console.log("🔧 Added closing bracket");
-          }
-        }
-        
-        // 3. Ensure object has closing brace if missing
-        if (fixed.startsWith('{') && !fixed.endsWith('}')) {
-          console.log("⚠️ Missing closing brace, attempting fix...");
-          fixed = fixed + '\n}';
-          console.log("🔧 Added closing brace");
-        }
-
-        const parsed = JSON.parse(fixed);
-        console.log("✅ Advanced fix successful!");
-        return parsed;
-      } catch (finalError) {
-        console.error("❌ All parsing attempts failed");
-        console.error("Parse error:", finalError.message);
-        console.error("Response length:", rawText.length);
-        throw new Error("Failed to parse AI response as valid JSON");
-      }
-    }
-  }
+const explanationSchema = {
+  type: Type.OBJECT,
+  properties: {
+    title: { type: Type.STRING },
+    explanation: { type: Type.STRING },
+  },
+  required: ["title", "explanation"],
 };
 
-// 🆕 Generate with automatic retry on parse failures
-const generateWithRetry = async (prompt, systemPrompt, maxTokens, maxRetries = 2) => {
-  let lastError = null;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`🔄 Attempt ${attempt}/${maxRetries}`);
-      return await generateWithGroq(prompt, systemPrompt, maxTokens);
-    } catch (error) {
-      lastError = error;
-      console.error(`❌ Attempt ${attempt} failed:`, error.message);
-      
-      // Don't retry on authentication errors
-      if (error.message.includes("401") || error.message.includes("API key")) {
-        throw error;
-      }
-      
-      // Wait before retry (exponential backoff)
-      if (attempt < maxRetries) {
-        const waitTime = 1000 * attempt; // 1s, 2s, 3s...
-        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
-    }
-  }
-  
-  throw lastError;
+const questionSchema = {
+  type: Type.OBJECT,
+  properties: {
+    question: { type: Type.STRING },
+    answer: { type: Type.STRING },
+  },
+  required: ["question", "answer"],
 };
 
-// Generate content with Groq (WITHOUT strict JSON mode)
-const generateWithGroq = async (prompt, systemPrompt, maxTokens = 4096) => {
-  console.log("🟢 [GROQ] Generating content...");
-  
-  try {
-    const completion = await getGroq().chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.3, // Even lower for more consistent JSON
-      max_tokens: maxTokens,
-      top_p: 0.9, // Add top_p for better consistency
-    });
+const nonEmpty = (value) => typeof value === "string" && value.trim().length > 0;
+const replyWithError = (res, status, message, error) =>
+  res.status(status).json({ success: false, message, error });
 
-    const rawText = completion.choices[0].message.content;
-    console.log("✅ [GROQ] Response received");
-    console.log("📊 Response size:", rawText.length, "characters");
+async function generate(req, res, { action, limit, prompt, schema, validate, maxOutputTokens }) {
+  const unavailable = () => replyWithError(
+    res, 503, "AI generation is temporarily unavailable. You can still use saved sessions.", "AI_UNAVAILABLE"
+  );
 
-    const parsedData = cleanAndParseJSON(rawText);
-    
-    // Validate the parsed data
-    if (Array.isArray(parsedData)) {
-      console.log("✅ Parsed as array with", parsedData.length, "items");
-    } else if (typeof parsedData === 'object') {
-      console.log("✅ Parsed as object with keys:", Object.keys(parsedData).join(', '));
-    }
-
-    return {
-      success: true,
-      data: parsedData,
-      provider: "groq",
-      model: "llama-3.3-70b-versatile",
-    };
-  } catch (error) {
-    console.error("❌ [GROQ] Error:", error.message);
-    throw error;
-  }
-};
-
-// 🆕 Enhanced parser specifically for explanations
-const parseExplanationResponse = (rawText) => {
-  console.log("📝 Parsing explanation response...");
-  console.log("📊 Response length:", rawText.length, "characters");
-  
-  try {
-    // Try direct parse first
-    const parsed = JSON.parse(rawText);
-    if (parsed.title && parsed.explanation) {
-      console.log("✅ Direct parse successful!");
-      return parsed;
-    }
-    throw new Error("Missing required fields");
-  } catch (error) {
-    console.log("⚠️ Direct parse failed:", error.message);
-  }
-
-  try {
-    // Remove markdown code blocks
-    let cleaned = rawText
-      .replace(/```javascript\n?/gi, "```javascript\n")
-      .replace(/```js\n?/gi, "```javascript\n")
-      .replace(/```json\n?/gi, "")
-      .replace(/```\n?/g, "")
-      .trim();
-
-    // Try parsing cleaned version
-    const parsed = JSON.parse(cleaned);
-    console.log("✅ Cleanup parse successful!");
-    return parsed;
-  } catch (secondError) {
-    console.log("⚠️ Standard cleanup failed:", secondError.message);
-    
-    try {
-      // Advanced cleanup for malformed JSON
-      let fixed = rawText
-        .replace(/```javascript\n?/gi, "```javascript\n")
-        .replace(/```js\n?/gi, "```javascript\n")
-        .replace(/```json\n?/gi, "")
-        .replace(/```\n?/g, "")
-        .trim();
-
-      // Fix common JSON issues
-      // 1. Remove trailing commas before closing brackets
-      fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
-      
-      // 2. Ensure array has closing bracket if missing
-      if (fixed.startsWith('[') && !fixed.endsWith(']')) {
-        console.log("⚠️ Missing closing bracket, attempting fix...");
-        // Find last complete object
-        const lastBraceIndex = fixed.lastIndexOf('}');
-        if (lastBraceIndex !== -1) {
-          fixed = fixed.substring(0, lastBraceIndex + 1) + '\n]';
-          console.log("🔧 Added closing bracket");
-        }
-      }
-      
-      // 3. Ensure object has closing brace if missing
-      if (fixed.startsWith('{') && !fixed.endsWith('}')) {
-        console.log("⚠️ Missing closing brace, attempting fix...");
-        fixed = fixed + '\n}';
-        console.log("🔧 Added closing brace");
-      }
-
-      const parsed = JSON.parse(fixed);
-      console.log("✅ Advanced fix successful!");
-      return parsed;
-    } catch (finalError) {
-      console.error("❌ All parsing attempts failed");
-      console.error("Parse error:", finalError.message);
-      console.error("Response length:", rawText.length);
-      console.error("First 500 chars:", rawText.substring(0, 500));
-      console.error("Last 500 chars:", rawText.substring(Math.max(0, rawText.length - 500)));
-      throw new Error("Failed to parse AI response as valid JSON");
-    }
-  }
-};
-
-// Generate content with Groq (WITHOUT strict JSON mode)
-const generateConceptExplanation = async (req, res) => {
-  console.log("\n" + "=".repeat(60));
-  console.log("🎯 Generate Concept Explanation Request");
-  console.log("=".repeat(60));
-
-  try {
-    if (!process.env.GROQ_API_KEY?.trim()) return aiUnavailable(res);
-    const userId = req.user._id;
-
-    // Rate limiting: 10 explanations per hour
-    if (isRateLimited(userId, "explanation", 10)) {
-      console.log("⛔ Rate limit hit for user:", userId);
-      return res.status(429).json({
-        success: false,
-        message: "Too many requests. You can generate 10 explanations per hour.",
-        error: "RATE_LIMIT_EXCEEDED",
-        retryAfter: 3600,
-      });
-    }
-
-    // Validate input
-    const { question } = req.body;
-
-    if (!question) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required field: question",
-      });
-    }
-
-    // Use improved prompt
-    const prompt = conceptExplainPrompt(question);
-
-    // Enhanced system prompt
-    const systemPrompt = `You are a technical expert. Always respond with ONLY a valid JSON object containing "title" and "explanation" fields. No extra text.`;
-
-    console.log("🟢 [GROQ] Generating explanation...");
-
-    // Generate with retry logic specifically for explanations
-    let lastError = null;
-    const maxRetries = 3;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`🔄 Attempt ${attempt}/${maxRetries}`);
-
-        const completion = await getGroq().chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-          model: "llama-3.3-70b-versatile",
-          temperature: 0.1, // Very low for consistency
-          max_tokens: 2048,
-          top_p: 0.85,
-        });
-
-        const rawText = completion.choices[0].message.content;
-        console.log("✅ [GROQ] Response received");
-        console.log("📊 Response size:", rawText.length, "characters");
-
-        // Use specialized explanation parser
-        const parsedData = parseExplanationResponse(rawText);
-
-        console.log("✅ Parsed explanation with title:", parsedData.title);
-        console.log("✅ SUCCESS - Explanation generated");
-        console.log("=".repeat(60) + "\n");
-
-        return res.status(200).json({
-          success: true,
-          data: parsedData,
-          provider: "groq",
-          model: "llama-3.3-70b-versatile",
-        });
-      } catch (error) {
-        lastError = error;
-        console.error(`❌ Attempt ${attempt} failed:`, error.message);
-
-        // Don't retry on authentication errors
-        if (
-          error.message.includes("401") ||
-          error.message.includes("API key")
-        ) {
-          throw error;
-        }
-
-        // Wait before retry (exponential backoff)
-        if (attempt < maxRetries) {
-          const waitTime = 1000 * attempt;
-          console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-          await new Promise((resolve) => setTimeout(resolve, waitTime));
-        }
-      }
-    }
-    
-    // All retries failed
-    throw lastError;
-    
-  } catch (error) {
-    console.error("💥 ERROR:", error.message);
-    console.log("=".repeat(60) + "\n");
-
-    // Handle rate limits
-    if (error.message.includes("rate_limit") || error.message.includes("429")) {
-      return res.status(429).json({
-        success: false,
-        message: "API rate limit reached. Please wait a moment and try again.",
-        error: "API_RATE_LIMIT",
-      });
-    }
-
-    // Handle authentication errors
-    if (
-      error.message.includes("401") ||
-      error.message.includes("authentication") ||
-      error.message.includes("API key")
-    ) {
-      return aiUnavailable(res);
-    }
-
-    // Handle JSON parsing errors with helpful message
-    if (error.message.includes("parse") || error.message.includes("JSON")) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to parse AI response. The question might be too complex. Try a different one.",
-        error: "PARSE_ERROR",
-        hint: "Try refreshing and asking again, or try a different question.",
-      });
-    }
-
-    // Generic error
-    return res.status(500).json({
+  if (!process.env.GEMINI_API_KEY?.trim()) return unavailable();
+  const retryAfter = reserveRequest(req.user._id, action, limit);
+  if (retryAfter) {
+    return res.status(429).set("Retry-After", String(retryAfter)).json({
       success: false,
-      message: "Failed to generate explanation. Please try again.",
+      message: `You can generate ${limit} sets of ${action} per hour. Please try again later.`,
+      error: "RATE_LIMIT_EXCEEDED",
+      retryAfter,
     });
   }
-};
 
-// ✅ Generate interview questions
-const generateInterviewQuestions = async (req, res) => {
-  console.log("\n" + "=".repeat(60));
-  console.log("🎯 Generate Interview Questions Request");
-  console.log("=".repeat(60));
-
+  const model = getGeminiModel();
   try {
-    if (!process.env.GROQ_API_KEY?.trim()) return aiUnavailable(res);
-    const userId = req.user._id;
-
-    // Rate limiting: 5 sessions per hour
-    if (isRateLimited(userId, "questions", 5)) {
-      console.log("⛔ Rate limit hit for user:", userId);
-      return res.status(429).json({
-        success: false,
-        message: "Too many requests. You can create 5 sessions per hour.",
-        error: "RATE_LIMIT_EXCEEDED",
-        retryAfter: 3600,
-      });
+    const data = await generateGeminiJson({ model, prompt, schema, maxOutputTokens });
+    if (!validate(data)) {
+      return replyWithError(res, 502, "AI returned an incomplete result. Please try again.", "INVALID_AI_RESPONSE");
     }
-
-    // Validate input
-    const { role, experience, topicsToFocus, numberOfQuestions } = req.body;
-    
-    console.log("📋 Request params:", {
-      role,
-      experience,
-      topicsToFocus,
-      numberOfQuestions,
-    });
-
-    if (!role || experience === undefined || experience === null || experience === "" || !topicsToFocus || !numberOfQuestions) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields",
-        requiredFields: ["role", "experience", "topicsToFocus", "numberOfQuestions"],
-      });
-    }
-
-    // Use your original prompt (already perfect!)
-    const prompt = questionAnswerPrompt(
-      role,
-      experience,
-      topicsToFocus,
-      numberOfQuestions
-    );
-
-    // Simple system prompt - just tell AI what it is
-    const systemPrompt = "You are a helpful AI assistant that generates technical interview questions. Always return valid JSON.";
-
-    // Generate with Groq (with retry logic)
-    const result = await generateWithRetry(prompt, systemPrompt, 4096, 3);
-
-    console.log("✅ SUCCESS - Questions generated");
-    console.log("=".repeat(60) + "\n");
-
-    return res.status(200).json({
-      success: true,
-      data: result.data,
-      provider: result.provider,
-      model: result.model,
-    });
+    return res.json({ success: true, data, provider: "gemini", model });
   } catch (error) {
-    console.error("💥 ERROR:", error.message);
-    console.log("=".repeat(60) + "\n");
-
-    // Handle Groq rate limits
-    if (error.message.includes("rate_limit") || error.message.includes("429")) {
-      return res.status(429).json({
-        success: false,
-        message: "API rate limit reached. Please wait a moment and try again.",
-        error: "API_RATE_LIMIT",
-      });
+    console.error("Gemini %s failed (%s).", action, error.status || error.name);
+    if (error.status === 429) {
+      return replyWithError(res, 429, "AI usage limit reached. Please wait and try again.", "API_RATE_LIMIT");
     }
-
-    // Handle authentication errors
-    if (
-      error.message.includes("401") ||
-      error.message.includes("authentication") ||
-      error.message.includes("API key")
-    ) {
-      return aiUnavailable(res);
+    if ([400, 401, 403, 404].includes(error.status)) return unavailable();
+    if (error instanceof SyntaxError) {
+      return replyWithError(res, 502, "AI returned an unreadable result. Please try again.", "INVALID_AI_RESPONSE");
     }
-
-    // Handle JSON parsing errors
-    if (error.message.includes("parse") || error.message.includes("JSON")) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to parse AI response. Please try again.",
-        error: "PARSE_ERROR",
-        hint: "The AI generated malformed JSON. Retrying should work.",
-      });
-    }
-
-    // Generic error
-    return res.status(500).json({
-      success: false,
-      message: "Failed to generate questions. Please try again.",
-    });
+    return replyWithError(res, 502, "AI generation failed. Please try again.", "AI_REQUEST_FAILED");
   }
-};
+}
 
-module.exports = {
-  generateInterviewQuestions,
-  generateConceptExplanation,
-};
+async function generateInterviewQuestions(req, res) {
+  const { role, experience, topicsToFocus, numberOfQuestions } = req.body ?? {};
+  const years = Number(experience);
+  const count = Number(numberOfQuestions);
+  const hasExperience = typeof experience === "number" || nonEmpty(experience);
+  const hasCount = typeof numberOfQuestions === "number" || nonEmpty(numberOfQuestions);
+
+  if (!nonEmpty(role) || !nonEmpty(topicsToFocus) || !hasExperience
+      || !Number.isFinite(years) || years < 0 || !hasCount
+      || !Number.isInteger(count) || count < 1 || count > 20) {
+    return replyWithError(res, 400, "Enter a role, topics, valid years of experience, and 1–20 questions.", "INVALID_INPUT");
+  }
+
+  return generate(req, res, {
+    action: "questions",
+    limit: 5,
+    prompt: questionAnswerPrompt(role.trim(), years, topicsToFocus.trim(), count),
+    schema: { type: Type.ARRAY, items: questionSchema, minItems: String(count), maxItems: String(count) },
+    validate: (data) => Array.isArray(data) && data.length === count
+      && data.every((item) => nonEmpty(item?.question) && nonEmpty(item?.answer)),
+    maxOutputTokens: 8192,
+  });
+}
+
+async function generateConceptExplanation(req, res) {
+  const { question } = req.body ?? {};
+  if (!nonEmpty(question)) {
+    return replyWithError(res, 400, "Enter a question to explain.", "INVALID_INPUT");
+  }
+
+  return generate(req, res, {
+    action: "explanations",
+    limit: 10,
+    prompt: conceptExplainPrompt(question.trim()),
+    schema: explanationSchema,
+    validate: (data) => nonEmpty(data?.title) && nonEmpty(data?.explanation),
+    maxOutputTokens: 4096,
+  });
+}
+
+module.exports = { generateInterviewQuestions, generateConceptExplanation };
