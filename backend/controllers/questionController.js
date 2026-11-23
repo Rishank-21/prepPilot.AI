@@ -1,5 +1,4 @@
 const  Question = require('../models/Question')
-const User = require("../models/User")
 const Session = require("../models/Session")
 
 
@@ -37,7 +36,7 @@ exports.addQuestionsToSession = async (req , res) => {
 
         console.log("✅ Questions array length:", questionsArray.length);
 
-        const session = await Session.findById(sessionId);
+        const session = await Session.findOne({ _id: sessionId, user: req.user._id });
         if (!session) {
           return res.status(404).json({ message: "session not found" });
         }
@@ -69,7 +68,7 @@ exports.addQuestionsToSession = async (req , res) => {
 exports.togglePinQuestion  = async ( req , res) => {
     try {
         const question = await Question.findById(req.params.id)
-        if(!question){
+        if (!question || !await Session.exists({ _id: question.session, user: req.user._id })){
             return res.status(404).json({ message : "question not found"})
         }
         question.isPinned = !question.isPinned
@@ -86,7 +85,7 @@ exports.updateQuestionNote = async ( req , res) => {
     try {
         const { note } = req.body
         const question = await Question.findById(req.params.id)
-        if(!question) {
+        if (!question || !await Session.exists({ _id: question.session, user: req.user._id })) {
             return res.status(404).json({ message : "question not found"})
         }
         question.note = note || "";

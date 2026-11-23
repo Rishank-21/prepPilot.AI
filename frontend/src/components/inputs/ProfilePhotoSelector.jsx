@@ -32,7 +32,7 @@ const ProfilePhotoSelector = ( { image , setImage , preview , setPreview}) => {
     <div className='flex justify-center mb-6'>
       <input 
       type='file'
-      accept='image/*'
+      accept='image/png,image/jpeg'
       ref={inputRef}
       onChange={handleImageChange}
       className='hidden' />
@@ -40,12 +40,12 @@ const ProfilePhotoSelector = ( { image , setImage , preview , setPreview}) => {
       { !image ? (
         <div className='w-20 h-20 flex items-center justify-center bg-orange-50 rounded-full relative cursor-pointer'>
             <LuUser className='text-4xl text-orange-500'></LuUser>
-            <button className='w-8 h-8 flex items-center justify-center bg-linear-to-r from-orange-500/85 to-orange-600 text-white rounded-full absolute -bottom-1 -right-1 cursor-pointer' type='button' onClick={oneChooseFile}><LuUpload></LuUpload></button>
+            <button className='w-8 h-8 flex items-center justify-center bg-linear-to-r from-orange-500/85 to-orange-600 text-white rounded-full absolute -bottom-1 -right-1 cursor-pointer' type='button' aria-label='Choose profile photo' onClick={oneChooseFile}><LuUpload></LuUpload></button>
         </div>
       ) :(
         <div className='relative'>
             <img src={preview || previewUrl} alt="profile photo" className='w-20 h-20 rounded-full object-cover' />
-            <button type='button' className='w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-full absolute -bottom-1 -right-1 cursor-pointer' onClick={handleRemoveImage}><LuTrash></LuTrash></button>
+            <button type='button' aria-label='Remove profile photo' className='w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-full absolute -bottom-1 -right-1 cursor-pointer' onClick={handleRemoveImage}><LuTrash></LuTrash></button>
         </div>
       )
     }

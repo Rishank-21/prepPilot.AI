@@ -49,7 +49,7 @@
 //         </div>
 //       </div>
 //       <div className="overflow-hidden transition-all duration-300 ease-in-out" style={{maxHeight : `${height}px`}}>
-//         <div ref={contentRef} className='mt-4 text-gray-700 bg-gray-50 px-5 py-3 rounded-lg'>
+//         <div inert={!isExpanded} ref={contentRef} className='mt-4 text-gray-700 bg-gray-50 px-5 py-3 rounded-lg'>
 //                 <AIResponsePreview content = {answer}/>
 //         </div>
 
@@ -98,10 +98,11 @@ const QuestionCard = ({ question, answer, onLearnMore, isPinned, onTogglePin }) 
 
         {/* Actions */}
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className={`flex flex-wrap gap-2 ${isExpanded ? "flex" : "hidden md:flex group-hover:flex"}`}>
+          <div className="flex flex-wrap gap-2">
             {/* Pin Button */}
             <button
               className="flex items-center gap-1 text-xs sm:text-sm text-indigo-800 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 hover:border-indigo-200 transition cursor-pointer"
+              aria-label={isPinned ? "Unpin question" : "Pin question"}
               onClick={onTogglePin}
             >
               {isPinned ? <LuPinOff size={14} /> : <LuPin size={14} />}
@@ -117,13 +118,15 @@ const QuestionCard = ({ question, answer, onLearnMore, isPinned, onTogglePin }) 
               }}
             >
               <LuSparkles size={14} />
-              <span className="hidden sm:inline">Learn More</span>
+              <span>Learn More</span>
             </button>
           </div>
 
           {/* Expand / Collapse */}
           <button
             className="text-gray-400 hover:text-gray-600 transition"
+            aria-label={isExpanded ? "Hide answer" : "Show answer"}
+            aria-expanded={isExpanded}
             onClick={toggleExpand}
           >
             <LuChevronDown
@@ -139,7 +142,7 @@ const QuestionCard = ({ question, answer, onLearnMore, isPinned, onTogglePin }) 
         className="overflow-hidden transition-all duration-300 ease-in-out"
         style={{ maxHeight: `${height}px` }}
       >
-        <div ref={contentRef} className="mt-4 text-gray-700 bg-gray-50 px-3 sm:px-5 py-3 rounded-lg">
+        <div inert={!isExpanded} ref={contentRef} className="mt-4 text-gray-700 bg-gray-50 px-3 sm:px-5 py-3 rounded-lg">
           <AIResponsePreview content={answer} />
         </div>
       </div>

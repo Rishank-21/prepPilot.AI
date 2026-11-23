@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import Input from '../../components/inputs/Input'
 import ProfilePhotoSelector from '../../components/inputs/ProfilePhotoSelector'
 import { validateEmail } from '../../utils/helper'
-import { UserContext } from '../../contexts/UserContext'
+import { UserContext } from '../../contexts/userContext'
 import axiosInstance from '../../utils/axiosInstance'
 import { API_PATHS } from '../../utils/apiPaths'
 import uploadImage from '../../utils/uploadImage'
 import toast from 'react-hot-toast'
 import SpinnerLoader from "../../components/loader/SpinnerLoader";
-const SignUp = ({ setCurrentPage }) => {
+const SignUp = () => {
   const [profilePic, setProfilePic] = useState(null);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -73,8 +73,8 @@ const SignUp = ({ setCurrentPage }) => {
     }
   };
   return (
-    <div className="w-[90vw] md:w-[33vw] p-7 flex flex-col justify-center">
-      <h3 className="text-lg font-semibold text-black ">Create An Account</h3>
+    <div className="w-full p-7 flex flex-col justify-center">
+      <h1 className="text-lg font-semibold text-black ">Create an account</h1>
       <p className="text-xs text-slate-700 mt-[5px] mb-6">
         Join us today by enterring your details below.
       </p>
@@ -103,7 +103,7 @@ const SignUp = ({ setCurrentPage }) => {
             type="password"
           />
         </div>
-        {error && <p className="text-red-500 textxs pb-2.5">{error}</p>}
+        {error && <p role="alert" className="text-red-700 textxs pb-2.5">{error}</p>}
         <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? <SpinnerLoader /> : "SIGN UP"}
         </button>
@@ -112,7 +112,7 @@ const SignUp = ({ setCurrentPage }) => {
           <button
             type="button"
             className="font-medium text-primary underline cursor-pointer"
-            onClick={() => setCurrentPage("login")}
+            onClick={() => navigate("/login")}
           >
             Login
           </button>

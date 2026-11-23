@@ -15,7 +15,7 @@ const AIResponsePreview = ({ content }) => {
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
-            code({ node, className, children, ...props }) {
+            code({ className, children }) {
               const match = /language-(\w+)/.exec(className || "");
               const language = match ? match[1] : "";
               const isInline = !className;
@@ -28,7 +28,6 @@ const AIResponsePreview = ({ content }) => {
               ) : (
                 <code
                   className="px-1 py-0.5 bg-gray-100 rounded text-sm text-pink-600"
-                  {...props}
                 >
                   {children}
                 </code>
@@ -121,5 +120,3 @@ function CodeBlock({ code, language }) {
 }
 
 export default AIResponsePreview;
-
-AIResponsePreview.jsx

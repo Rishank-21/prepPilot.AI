@@ -1,35 +1,6 @@
-// import React, { useContext } from 'react'
-// import { UserContext } from '../../contexts/UserContext'
-// import { useNavigate } from 'react-router-dom'
-
-// const ProfileInfoCard = () => {
-//     const { user, clearUser } = useContext(UserContext)
-//     const navigate = useNavigate()
-
-//     const handleLogout = () => {
-//         localStorage.clear()
-//         clearUser()
-//         navigate("/")
-//     }
-//   return (
-//     user && (
-//     <div className='flex items-center'>
-//         <img src={user.profileImageUrl} alt="profile"  className='w-11 h-11 bg-gray-300 rounded-full mr-3'/>
-//         <div className=''>
-//             <div className='text-[15px] text-black font-bold leading-3'>
-//                 {user.fullName || ""}
-//             </div>
-//             <button className=' text-amber-600 text-sm font-semibold cursor-pointer' onClick={handleLogout}>Logout</button>
-//         </div>
-//     </div>
-//   ) )
-// }
-
-// export default ProfileInfoCard
-
-
-import React, { useContext } from 'react';
-import { UserContext } from '../../contexts/UserContext';
+import { useContext } from 'react';
+import { UserContext } from '../../contexts/userContext';
+import { getInitials } from '../../utils/helper';
 import { useNavigate } from 'react-router-dom';
 
 const ProfileInfoCard = () => {
@@ -37,7 +8,6 @@ const ProfileInfoCard = () => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    localStorage.clear();
     clearUser();
     navigate('/');
   };
@@ -46,11 +16,13 @@ const ProfileInfoCard = () => {
 
   return (
     <div className="flex items-center">
-      <img
-        src={user.user?.profileImageUrl || 'https://placehold.co/64x64?text=👤'}
-        alt="profile"
-        className="w-13 h-13 bg-gray-300 rounded-full mr-3 object-cover"
-      />
+      {user.user?.profileImageUrl ? (
+        <img src={user.user.profileImageUrl} alt="" className="mr-3 size-10 rounded-full object-cover" />
+      ) : (
+        <span aria-hidden="true" className="mr-3 grid size-10 place-items-center rounded-full bg-emerald-100 font-bold text-emerald-900">
+          {getInitials(user.user?.fullName || "")}
+        </span>
+      )}
       <div>
         <div className="text-[15px] text-black font-bold leading-3">
           {user.user?.fullName || ''}

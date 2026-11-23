@@ -1,44 +1,35 @@
-import React, { useState } from 'react'
-import { FaRegEye , FaRegEyeSlash } from "react-icons/fa6"
-const Input = ({ type, value, onChange, placeholder, label }) => {
-    const [showPassword , setShowPassword] = useState(false)
+import { useId, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
-    const toggleShowPassword = () => {
-        setShowPassword(!showPassword)
-    }
+export default function Input({ type, value, onChange, placeholder, label }) {
+  const id = useId();
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === "password";
+  const Icon = showPassword ? EyeOff : Eye;
+
   return (
     <div>
-       <label className='text-[13px] text-slate-800 '>{label}</label>
-       <div className='input-box'>
-        <input type={
-            type == "password" ? (showPassword ? "text" : "password") : type
-        } 
-        placeholder={placeholder}
-        className='w-full bg-transparent outline-none'
-        value={value}
-        onChange={(e) => onChange(e)}
-        /> 
-        {type === "password" && (
-            <>
-            {showPassword ? (
-                <FaRegEye 
-                size = {22}
-                className = "text-primary cursor-pointer"
-                onClick = {() => toggleShowPassword()}
-                />
-            ) : (
-                <FaRegEyeSlash
-                size={22}
-                className='text-slate-400 cursor-pointer'
-                onClick={() => toggleShowPassword()}
-                />
-            )
-        }
-            </>
+      <label htmlFor={id} className="text-sm font-semibold text-slate-800">{label}</label>
+      <div className="input-box">
+        <input
+          id={id}
+          type={isPassword && showPassword ? "text" : type}
+          placeholder={placeholder}
+          className="min-w-0 flex-1 bg-transparent outline-none"
+          value={value}
+          onChange={onChange}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            onClick={() => setShowPassword(!showPassword)}
+            className="text-slate-600"
+          >
+            <Icon size={20} aria-hidden="true" />
+          </button>
         )}
-       </div>
+      </div>
     </div>
-  )
+  );
 }
-
-export default Input
